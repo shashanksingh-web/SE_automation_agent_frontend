@@ -60,6 +60,12 @@ export interface Task {
   Credit_On_Hold_Reason: string | null;
   Estimated_Duration: number | null;
   Priority_Multiplier: number | null;
+  // sale_orderrequest.partner_finance_status ("financed" | "non_financed"), from this
+  // DC's most recent order of any status - same source Credit_On_Hold reads (added
+  // 2026-09-03). This is the DC's CURRENT status, not a static attribute - confirmed
+  // live it genuinely changes over a DC's order history. null means no order has this
+  // field populated at all, not an assumed "non_financed".
+  Finance_Status: "financed" | "non_financed" | null;
   // Cross-cutting "cover this one first" signal (confirmed 2026-08-18) - chronic miss
   // escalation (DCVisitStreak.consecutive_misses >= ESCALATION_THRESHOLD), a real
   // overdue balance aged 90+ days, or credit-on-hold. Critical_Reasons is a

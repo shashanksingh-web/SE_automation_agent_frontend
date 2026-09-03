@@ -15,7 +15,7 @@ interface PlanRunDetailProps {
 // Shared renderer for the PlanRun shape (§7) - used by every scope view and by
 // Runs History detail (§14), since both consume the identical response shape.
 export function PlanRunDetail({ planRun, onOpenPitch, onOpenDCCard, onOpenRoutes }: PlanRunDetailProps) {
-  const { meta, seById, seOrder } = planRun;
+  const { meta, seById, seOrder, exceptions } = planRun;
 
   return (
     <div className="space-y-4">
@@ -38,6 +38,7 @@ export function PlanRunDetail({ planRun, onOpenPitch, onOpenDCCard, onOpenRoutes
             seId={seId}
             seName={seById[seId].SE_Name}
             tasks={seById[seId].taskOrder.map((dcId) => seById[seId].taskIdsByDcId[dcId])}
+            exceptions={exceptions}
             onOpenPitch={onOpenPitch}
             onOpenDCCard={onOpenDCCard}
             onOpenRoutes={onOpenRoutes}

@@ -1,4 +1,25 @@
-export type RoutePlanType = "PRIORITY_MAX" | "DISTANCE_MIN" | "BALANCED";
+// Plan A (existing 3 models) vs Plan B (Beat Planning / Cluster-Based Model, added
+// 2026-08-31 - planning/models.py RoutePlan.PlanType) - one PlanRun only ever generates
+// one family's 3 RoutePlan rows (planning/routing.py: generate_route_plans_for_se's
+// plan_choice branch), chosen via ?routing_plan=A|B at plan-generation time (see
+// scopeApi.get/normalizationApi.tuff), not at routes-list time.
+export type RoutePlanType =
+  | "PRIORITY_MAX"
+  | "DISTANCE_MIN"
+  | "BALANCED"
+  | "CLUSTER_BASED"
+  | "CLUSTER_SCOREMAX"
+  | "CLUSTER_DISTMIN";
+
+export const CLUSTER_PLAN_TYPES: RoutePlanType[] = [
+  "CLUSTER_BASED",
+  "CLUSTER_SCOREMAX",
+  "CLUSTER_DISTMIN",
+];
+
+export function routePlanFamily(planType: RoutePlanType): "A" | "B" {
+  return CLUSTER_PLAN_TYPES.includes(planType) ? "B" : "A";
+}
 
 export interface RouteStop {
   sequence_no: number;
@@ -64,4 +85,7 @@ export const ROUTE_PLAN_TYPES: RoutePlanType[] = [
   "PRIORITY_MAX",
   "DISTANCE_MIN",
   "BALANCED",
+  "CLUSTER_BASED",
+  "CLUSTER_SCOREMAX",
+  "CLUSTER_DISTMIN",
 ];

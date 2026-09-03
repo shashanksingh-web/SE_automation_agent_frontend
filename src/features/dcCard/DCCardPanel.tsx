@@ -1,6 +1,8 @@
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/shared/components/ui/drawer";
 import { useDCCard } from "@/shared/api/hooks/useDCCard";
-import { RecommendedProductCard } from "@/shared/components/RecommendedProductCard";
+import { ClubStandingDetail } from "@/shared/components/ClubStandingDetail";
+import { BusinessAreaStrengthCard } from "@/features/dcCard/BusinessAreaStrengthCard";
+import { TurnoverStandingCard } from "@/features/dcCard/TurnoverStandingCard";
 import { Loader2 } from "lucide-react";
 
 interface DCCardPanelProps {
@@ -10,25 +12,62 @@ interface DCCardPanelProps {
   onClose: () => void;
 }
 
-// Each section is pre-formatted as newline-separated "- Label: text" bullets, or a
-// single "(no data available)"-style line when nothing was wired for it this run.
-// Rendered as a bullet list when there's more than one line, plain text otherwise.
-function SectionBody({ text }: { text: string }) {
-  const lines = text
+interface SectionItem {
+  head: string;
+  detail: string[];
+}
+
+// Each section is pre-formatted as newline-separated "- Label: text" bullets (one per
+// build_dc_card() run() call), or a single "(no data available)"-style line when
+// nothing was wired for it this run. A bullet's own text can itself be multi-line - the
+// continuation lines never start with "- ", only a fresh top-level bullet does, so that
+// prefix is what distinguishes "new bullet" from "detail nested under the previous one,"
+// not a fixed line count.
+function parseSectionItems(text: string): SectionItem[] {
+  const rawLines = text
     .split("\n")
-    .map((line) => line.trim().replace(/^-\s*/, ""))
+    .map((line) => line.trim())
     .filter(Boolean);
 
-  if (lines.length === 0) return null;
-  if (lines.length === 1) return <p className="text-sm text-muted-foreground">{lines[0]}</p>;
+  const items: SectionItem[] = [];
+  for (const line of rawLines) {
+    if (line.startsWith("- ")) {
+      items.push({ head: line.slice(2), detail: [] });
+    } else if (items.length > 0) {
+      items[items.length - 1].detail.push(line);
+    } else {
+      items.push({ head: line, detail: [] });
+    }
+  }
+  return items;
+}
+
+function SectionItemsBody({ items }: { items: SectionItem[] }) {
+  if (items.length === 0) return null;
+  if (items.length === 1 && items[0].detail.length === 0) {
+    return <p className="text-sm text-muted-foreground">{items[0].head}</p>;
+  }
 
   return (
-    <ul className="list-inside list-disc space-y-1 text-sm">
-      {lines.map((line, i) => (
-        <li key={i}>{line}</li>
+    <ul className="list-inside list-disc space-y-1.5 text-sm">
+      {items.map((item, i) => (
+        <li key={i}>
+          {item.head}
+          {item.detail.length > 0 && (
+            <ul className="ml-4 mt-1 list-inside list-[circle] space-y-0.5 text-xs text-muted-foreground">
+              {item.detail.map((line, j) => (
+                <li key={j}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </li>
       ))}
     </ul>
   );
+}
+
+function SectionBody({ text }: { text: string }) {
+  return <SectionItemsBody items={parseSectionItems(text)} />;
 }
 
 // DC Card (Preface) / "Dehaat Center Ko Jaano" (planning/dc_card.py) - a second,
@@ -67,9 +106,19 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
 
         {data && (
           <div className="space-y-4 overflow-auto">
-            <div className="rounded-md border p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">1. कौन (Who)</div>
-              <SectionBody text={data.Who_Section} />
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-primary">1. कौन (Who)</div>
+              <BusinessAreaStrengthCard detail={data.Business_Area_Detail} />
+              <TurnoverStandingCard detail={data.Turnover_Detail} />
+              <ClubStandingDetail club={data.Club_Detail} />
+              <SectionItemsBody
+                items={parseSectionItems(data.Who_Section).filter(
+                  (item) =>
+                    !item.head.startsWith("Business Area Strength:") &&
+                    !item.head.startsWith("Turnover-wise Standing:") &&
+                    !item.head.startsWith("Scheme Standing:"),
+                )}
+              />
             </div>
             <div className="rounded-md border p-3">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
@@ -77,16 +126,6 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
               </div>
               <SectionBody text={data.Where_DC_Stands_Section} />
             </div>
-            <div className="rounded-md border p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                3. प्राइवेट लेबल (Private Label)
-              </div>
-              <RecommendedProductCard products={data.Recommended_Products} />
-              <div className={data.Recommended_Products.length > 0 ? "mt-3" : undefined}>
-                <SectionBody text={data.Private_Label_Section} />
-              </div>
-            </div>
-
             <div className="flex flex-wrap gap-4 border-t pt-3">
               {data.Data_Sources_Used.length > 0 && (
                 <div>
