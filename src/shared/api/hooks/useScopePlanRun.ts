@@ -2,7 +2,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { scopeApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
 import { normalizePlanRun, mergeNormalizedPlanRuns } from "@/shared/api/normalize";
-import type { DateSelection, ScopePathSegment } from "@/shared/types/scope";
+import type { DateSelection, RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import { dateSelectionToQueryParam } from "@/shared/types/scope";
 import { useMemo } from "react";
 
@@ -11,15 +11,26 @@ import { useMemo } from "react";
 // poll for, so no refetchInterval here. A large scope (e.g. a State with 100+ SEs) can
 // just mean the underlying HTTP request takes a while; the query's own isLoading covers
 // that. Status is a post-hoc approval marker, not a progress signal - see StatusBanner.
+//
+// routingPlan (added 2026-08-31) is threaded through the same way date is: since every
+// scope GET regenerates the whole plan from scratch, a passive re-fetch that omitted it
+// would silently regenerate back to Plan A server-side even after the user picked Plan B
+// via Create/Refresh.
 export function useScopePlanRun(
   segment: ScopePathSegment,
   scopeValue: string | undefined,
   date: DateSelection,
+  routingPlan: RoutingPlanChoice,
+  enableRotation: boolean,
 ) {
   return useQuery({
-    queryKey: queryKeys.scope(segment, scopeValue ?? "", date),
+    queryKey: queryKeys.scope(segment, scopeValue ?? "", date, routingPlan, enableRotation),
     queryFn: () =>
-      scopeApi.get(segment, scopeValue!, { date: dateSelectionToQueryParam(date) }),
+      scopeApi.get(segment, scopeValue!, {
+        date: dateSelectionToQueryParam(date),
+        routing_plan: routingPlan,
+        rotation: enableRotation,
+      }),
     enabled: !!scopeValue,
     select: normalizePlanRun,
   });
@@ -31,12 +42,18 @@ export function useMultiScopePlanRuns(
   segment: ScopePathSegment,
   scopeValues: string[],
   date: DateSelection,
+  routingPlan: RoutingPlanChoice,
+  enableRotation: boolean,
 ) {
   const results = useQueries({
     queries: scopeValues.map((scopeValue) => ({
-      queryKey: queryKeys.scope(segment, scopeValue, date),
+      queryKey: queryKeys.scope(segment, scopeValue, date, routingPlan, enableRotation),
       queryFn: () =>
-        scopeApi.get(segment, scopeValue, { date: dateSelectionToQueryParam(date) }),
+        scopeApi.get(segment, scopeValue, {
+          date: dateSelectionToQueryParam(date),
+          routing_plan: routingPlan,
+          rotation: enableRotation,
+        }),
       select: normalizePlanRun,
     })),
   });

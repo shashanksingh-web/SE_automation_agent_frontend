@@ -22,7 +22,7 @@ import type {
   ScheduledScopeEntry,
   RunsListEntry,
 } from "@/shared/types/feedback";
-import type { ScopePathSegment } from "@/shared/types/scope";
+import type { RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import type { DCCardResponse } from "@/shared/types/dcCard";
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,11 @@ export const directoryApi = {
 // (SE email, ABM/RBM employee code, Node/Block/District/State name).
 // ---------------------------------------------------------------------------
 export const scopeApi = {
-  get: (segment: ScopePathSegment, scopeValue: string, params?: { date?: string }) =>
+  get: (
+    segment: ScopePathSegment,
+    scopeValue: string,
+    params?: { date?: string; routing_plan?: RoutingPlanChoice; rotation?: boolean },
+  ) =>
     apiGet<PlanRunResponse>(
       `/${segment}/${encodeURIComponent(scopeValue)}/`,
       params,
@@ -87,7 +91,13 @@ export const normalizationApi = {
   tuff: (
     scopeType: "SE" | "ABM" | "RBM" | "NODE" | "BLOCK" | "DISTRICT" | "STATE",
     scopeValue: string,
-    params?: { date?: string; force_normalization?: boolean; skip_normalization?: boolean },
+    params?: {
+      date?: string;
+      force_normalization?: boolean;
+      skip_normalization?: boolean;
+      routing_plan?: RoutingPlanChoice;
+      rotation?: boolean;
+    },
   ) =>
     apiGet<TuffResponse>(
       `/tuff/${scopeType}/${encodeURIComponent(scopeValue)}/`,

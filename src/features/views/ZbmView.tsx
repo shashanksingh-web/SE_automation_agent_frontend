@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAppStore } from "@/shared/store/appStore";
 import { ScopeSelector } from "@/features/scopeSelector/ScopeSelector";
 import { DateSelector } from "@/features/dateSelector/DateSelector";
+import { RoutingPlanSelector } from "@/features/routing/RoutingPlanSelector";
 import { CreateOrRefreshButton } from "@/features/views/shared/CreateOrRefreshButton";
 import { MultiScopeSummary } from "@/features/views/shared/MultiScopeSummary";
 import { TaskTable } from "@/features/views/shared/TaskTable";
@@ -21,6 +22,8 @@ import type { Task } from "@/shared/types/planRun";
 export function ZbmView() {
   const zbmValues = useAppStore((s) => s.scopeSelection.ZBM ?? []);
   const dateSelection = useAppStore((s) => s.dateSelection);
+  const routingPlan = useAppStore((s) => s.routingPlan);
+  const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
   const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
@@ -43,6 +46,8 @@ export function ZbmView() {
     "state",
     coveredStates,
     dateSelection,
+    routingPlan,
+    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -53,8 +58,15 @@ export function ZbmView() {
         <h1 className="text-lg font-semibold">ZBM / State Head</h1>
         <div className="flex flex-wrap items-center gap-2">
           <DateSelector />
+          <RoutingPlanSelector />
           <ScopeSelector scopeType="ZBM" />
-          <CreateOrRefreshButton scopeType="STATE" scopeValues={coveredStates} date={dateSelection} />
+          <CreateOrRefreshButton
+            scopeType="STATE"
+            scopeValues={coveredStates}
+            date={dateSelection}
+            routingPlan={routingPlan}
+            enableRotation={enableRotation}
+          />
         </div>
       </div>
 
@@ -96,6 +108,7 @@ export function ZbmView() {
                   tasks={merged.seById[seId].taskOrder.map(
                     (dcId) => merged.seById[seId].taskIdsByDcId[dcId],
                   )}
+                  exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
                   onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
@@ -125,6 +138,7 @@ export function ZbmView() {
         se={routesTarget?.seId ?? null}
         planDate={planDate}
         dcNames={routesTarget?.dcNames}
+        exceptions={merged.exceptions}
         onClose={() => setRoutesTarget(null)}
       />
     </div>

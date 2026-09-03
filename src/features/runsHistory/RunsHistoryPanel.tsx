@@ -134,6 +134,7 @@ export function RunsHistoryPanel({ open, onClose }: RunsHistoryPanelProps) {
         se={routesTarget?.seId ?? null}
         planDate={detailQuery.data?.meta.Plan_Date ?? ""}
         dcNames={routesTarget?.dcNames}
+        exceptions={detailQuery.data?.exceptions}
         onClose={() => setRoutesTarget(null)}
       />
     </>

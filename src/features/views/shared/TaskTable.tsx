@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, MessageSquareText, Route, IdCard } from "lucide-react";
-import type { Task, ClubDetail } from "@/shared/types/planRun";
+import type { Exception, Task } from "@/shared/types/planRun";
+import { ClubStandingDetail } from "@/shared/components/ClubStandingDetail";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/components/ui/table";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
@@ -13,16 +14,40 @@ interface TaskTableProps {
   seId: string;
   seName: string;
   tasks: Task[];
+  // The PlanRun's full Exceptions_Report (added 2026-09-02) - filtered below per-DC to
+  // surface DC_Datamart_Inactive_Outstanding_Unavailable (se_daily_plan_agent.py, added
+  // 2026-09-01 commit a31b130): a DC not marked active in dc_datamart gets no Outstanding/
+  // Overdue/Avg_Repayment_Days data at all - honestly None, not a fabricated zero - but
+  // without this, that just reads as a bare "-" with no explanation, same silent-gap
+  // problem the route drawer had before this fix. Record_ID on this exception is the
+  // DC_ID directly (se_daily_plan_agent.py exc.flag), no string parsing needed.
+  exceptions?: Exception[];
   onOpenPitch: (task: Task) => void;
   onOpenDCCard: (task: Task) => void;
   onOpenRoutes: (seId: string, dcNames: Record<string, string>) => void;
 }
 
+const INACTIVE_OUTSTANDING_REASON_CODE = "DC_Datamart_Inactive_Outstanding_Unavailable";
+
+// Same display convention as the CLI's own outcome table (planning/reporting.py:
+// {"financed": "Financed", "non_financed": "Non-Financed"}.get(t.finance_status,
+// "Unknown")) - null means no order has this field populated at all, not an assumed
+// "Non-Financed", so it reads as "Unknown" rather than a default value.
+const FINANCE_STATUS_LABELS: Record<string, string> = {
+  financed: "Financed",
+  non_financed: "Non-Financed",
+  unknown: "Unknown",
+};
+
 // Daily task table (Plans[].Tasks[], §7). Actuals are empty for future/unreconciled
 // dates, so the planned-vs-actual block renders as an expandable second row per
 // task (the OutcomePanel concern, §7/§18) instead of always-visible columns.
-export function TaskTable({ seId, seName, tasks, onOpenPitch, onOpenDCCard, onOpenRoutes }: TaskTableProps) {
+export function TaskTable({ seId, seName, tasks, exceptions = [], onOpenPitch, onOpenDCCard, onOpenRoutes }: TaskTableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const inactiveOutstandingDcIds = new Set(
+    exceptions.filter((e) => e.Reason_Code === INACTIVE_OUTSTANDING_REASON_CODE).map((e) => e.Record_ID),
+  );
 
   // SEDirectoryEntry has no display name (se_email is the only identifier, see that
   // type's own comment) but does carry nodes[] - an SE can genuinely cover more than
@@ -167,7 +192,11 @@ export function TaskTable({ seId, seName, tasks, onOpenPitch, onOpenDCCard, onOp
                   <TableRow className="bg-muted/20 hover:bg-muted/20">
                     <TableCell />
                     <TableCell colSpan={7}>
-                      <TaskDetailRow task={task} hasReconciliation={hasReconciliation} />
+                      <TaskDetailRow
+                        task={task}
+                        hasReconciliation={hasReconciliation}
+                        outstandingUnavailable={inactiveOutstandingDcIds.has(task.DC_ID)}
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -196,58 +225,20 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-// Structured breakdown of Club_Detail (se_daily_plan_agent.normalize_dc_club(),
-// confirmed 2026-08-19) - DC_Club_Participation's one-line prose already carries this
-// same data, this pulls it into its own callout for two questions a plain string
-// answers less clearly: "if enrolled and outstanding is clear, where do they actually
-// stand" (Club_Tier set - current tier/zone/TOD%/reward) and "if outstanding gets
-// cleared, which scheme would they be eligible for and what's the benefit"
-// (Eligible_Tier_If_Outstanding_Cleared set - the pitch opportunity). The two are
-// mutually exclusive - a DC is either already tiered, or working towards one, never both.
-function ClubStandingDetail({ club }: { club: ClubDetail | null }) {
-  if (!club) return null;
-
-  if (club.Club_Tier) {
-    return (
-      <div className="sm:col-span-2 lg:col-span-4 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
-        <span className="font-semibold uppercase tracking-wide text-primary">Current club standing:</span>{" "}
-        {club.Club_Tier} tier
-        {club.Zone && `, ${club.Zone} zone`}
-        {club.TOD_Percent != null && `, ${club.TOD_Percent.toFixed(2)}% TOD`}
-        {club.Reward && ` - ${club.Reward}`}
-      </div>
-    );
-  }
-
-  if (club.Eligible_Tier_If_Outstanding_Cleared) {
-    return (
-      <div className="sm:col-span-2 lg:col-span-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-        <span className="font-semibold uppercase tracking-wide">If outstanding cleared - pitch point:</span>{" "}
-        eligible for {club.Eligible_Tier_If_Outstanding_Cleared} tier
-        {club.Eligible_Tier_TOD_Percent_If_Cleared != null && `, ${club.Eligible_Tier_TOD_Percent_If_Cleared.toFixed(2)}% TOD`}
-        {club.Eligible_Tier_Reward_If_Cleared && ` - ${club.Eligible_Tier_Reward_If_Cleared}`}
-      </div>
-    );
-  }
-
-  // Enrolled, but not close enough for ANY tier yet - not even clearing outstanding
-  // would unlock one (fixed 2026-08-19: this used to render nothing at all here,
-  // leaving turnover-too-low and outstanding-not-cleared indistinguishable from each
-  // other in the UI, even though DC_Club_Participation's own text already separates
-  // them). Turnover is the real gap here, not outstanding - see that field for detail.
-  if (club.Is_Club_Enrolled) {
-    return (
-      <div className="sm:col-span-2 lg:col-span-4 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span className="font-semibold uppercase tracking-wide">Not yet eligible for any tier:</span>{" "}
-        {club.Qualifying_Turnover != null
-          ? `qualifying turnover ₹${club.Qualifying_Turnover.toLocaleString("en-IN")} this scheme year - below Copper's entry threshold.`
-          : "no qualifying turnover recorded this scheme year."}
-      </div>
-    );
-  }
-
-  return null;
+// DC_Datamart_Inactive_Outstanding_Unavailable (se_daily_plan_agent.py, added 2026-09-01)
+// - this DC isn't marked active in dc_datamart, so Outstanding/Overdue/Avg_Repayment_Days
+// were withheld rather than fabricated. Distinct from a plain "-" (which just means this
+// particular field happened to be null) - this one has a known, specific cause.
+function InactiveOutstandingNote() {
+  return (
+    <span className="text-muted-foreground" title="dc_datamart doesn't mark this DC active, so outstanding/aging data isn't available for it this run.">
+      Inactive in system
+    </span>
+  );
 }
+
+// ClubStandingDetail (structured Club_Detail breakdown) moved to
+// @/shared/components/ClubStandingDetail - shared with DCCardPanel's Scheme Standing.
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -309,8 +300,22 @@ function isResyncedTask(task: Task): boolean {
 // The planned-vs-actual reconciliation block (OutcomePanel concern, §7): only
 // meaningful once Reconciled_At is set, so it's a distinct "Actuals" section
 // rather than columns that are blank for every future/unreconciled task.
-function TaskDetailRow({ task, hasReconciliation }: { task: Task; hasReconciliation: boolean }) {
+function TaskDetailRow({
+  task,
+  hasReconciliation,
+  outstandingUnavailable,
+}: {
+  task: Task;
+  hasReconciliation: boolean;
+  // DC_Datamart_Inactive_Outstanding_Unavailable fired for this DC (see TaskTable's own
+  // doc comment) - Present_Outstanding/Overdue/Avg_Repayment_Days read as a bare "-"
+  // for the same reason any other None field does, but here there's a real, specific
+  // cause worth surfacing instead of leaving it looking like an unexplained gap.
+  outstandingUnavailable: boolean;
+}) {
   const resynced = isResyncedTask(task);
+  const [reasonOpen, setReasonOpen] = useState(true);
+  const reasonBullets = task.Reason_Of_Visit ? parseReasonBullets(task.Reason_Of_Visit) : [];
 
   return (
     <div className="grid gap-4 py-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -323,13 +328,30 @@ function TaskDetailRow({ task, hasReconciliation }: { task: Task; hasReconciliat
         </div>
       )}
       <div className="sm:col-span-2 lg:col-span-4">
-        <div className="text-xs text-muted-foreground">Reason of visit</div>
-        {task.Reason_Of_Visit ? (
-          <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm">
-            {parseReasonBullets(task.Reason_Of_Visit).map((bullet, i) => (
-              <li key={i}>{bullet}</li>
-            ))}
-          </ul>
+        {reasonBullets.length > 0 ? (
+          <button
+            type="button"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setReasonOpen((o) => !o)}
+          >
+            {reasonOpen ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+            Reason of visit ({reasonBullets.length})
+          </button>
+        ) : (
+          <div className="text-xs text-muted-foreground">Reason of visit</div>
+        )}
+        {reasonBullets.length > 0 ? (
+          reasonOpen && (
+            <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm">
+              {reasonBullets.map((bullet, i) => (
+                <li key={i}>{bullet}</li>
+              ))}
+            </ul>
+          )
         ) : (
           <div className="text-sm">-</div>
         )}
@@ -341,11 +363,28 @@ function TaskDetailRow({ task, hasReconciliation }: { task: Task; hasReconciliat
         </div>
       )}
       <Field label="Days since last visit" value={task.Days_Since_Last_Visit} />
-      <Field label="Present outstanding" value={formatCurrency(task.Present_Outstanding)} />
-      <Field label="Present overdue" value={formatCurrency(task.Present_Overdue)} />
+      <Field
+        label="Present outstanding"
+        value={
+          formatCurrency(task.Present_Outstanding) ??
+          (outstandingUnavailable ? <InactiveOutstandingNote /> : undefined)
+        }
+      />
+      <Field
+        label="Present overdue"
+        value={
+          formatCurrency(task.Present_Overdue) ?? (outstandingUnavailable ? <InactiveOutstandingNote /> : undefined)
+        }
+      />
       <Field
         label="Avg repayment days"
-        value={task.Avg_Repayment_Days != null ? `${Math.round(task.Avg_Repayment_Days)} days` : undefined}
+        value={
+          task.Avg_Repayment_Days != null
+            ? `${Math.round(task.Avg_Repayment_Days)} days`
+            : outstandingUnavailable
+              ? <InactiveOutstandingNote />
+              : undefined
+        }
       />
       <Field label="Last order date" value={task.Last_Order_Date} />
       <Field label="Last order value" value={formatCurrency(task.Last_Order_Value)} />
@@ -356,7 +395,10 @@ function TaskDetailRow({ task, hasReconciliation }: { task: Task; hasReconciliat
         label="Credit on hold"
         value={task.Credit_On_Hold ? `Yes - ${task.Credit_On_Hold_Reason ?? "no reason given"}` : "No"}
       />
-      <ClubStandingDetail club={task.Club_Detail} />
+      <Field label="Finance status" value={FINANCE_STATUS_LABELS[task.Finance_Status ?? "unknown"]} />
+      <div className="sm:col-span-2 lg:col-span-4">
+        <ClubStandingDetail club={task.Club_Detail} />
+      </div>
 
       <div className={cn("sm:col-span-2 lg:col-span-4 rounded-md border p-3", !hasReconciliation && "opacity-60")}>
         <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

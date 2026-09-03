@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppStore } from "@/shared/store/appStore";
 import { ScopeSelector } from "@/features/scopeSelector/ScopeSelector";
 import { DateSelector } from "@/features/dateSelector/DateSelector";
+import { RoutingPlanSelector } from "@/features/routing/RoutingPlanSelector";
 import { CreateOrRefreshButton } from "@/features/views/shared/CreateOrRefreshButton";
 import { PlanRunDetail } from "@/features/views/shared/PlanRunDetail";
 import { MultiScopeSummary } from "@/features/views/shared/MultiScopeSummary";
@@ -29,6 +30,8 @@ interface ScopeViewProps {
 export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
   const scopeValues = useAppStore((s) => s.scopeSelection[scopeType] ?? []);
   const dateSelection = useAppStore((s) => s.dateSelection);
+  const routingPlan = useAppStore((s) => s.routingPlan);
+  const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
   const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
@@ -39,6 +42,8 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
     pathSegment,
     scopeValues,
     dateSelection,
+    routingPlan,
+    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -50,8 +55,15 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
         <h1 className="text-lg font-semibold">{title}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <DateSelector />
+          <RoutingPlanSelector />
           <ScopeSelector scopeType={scopeType} />
-          <CreateOrRefreshButton scopeType={scopeType} scopeValues={scopeValues} date={dateSelection} />
+          <CreateOrRefreshButton
+            scopeType={scopeType}
+            scopeValues={scopeValues}
+            date={dateSelection}
+            routingPlan={routingPlan}
+            enableRotation={enableRotation}
+          />
         </div>
       </div>
 
@@ -98,6 +110,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
                   tasks={merged.seById[seId].taskOrder.map(
                     (dcId) => merged.seById[seId].taskIdsByDcId[dcId],
                   )}
+                  exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
                   onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
@@ -127,6 +140,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
         se={routesTarget?.seId ?? null}
         planDate={planDate}
         dcNames={routesTarget?.dcNames}
+        exceptions={merged.exceptions}
         onClose={() => setRoutesTarget(null)}
       />
     </div>

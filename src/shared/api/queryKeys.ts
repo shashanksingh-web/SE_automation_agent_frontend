@@ -1,4 +1,4 @@
-import type { DateSelection } from "@/shared/types/scope";
+import type { DateSelection, RoutingPlanChoice } from "@/shared/types/scope";
 import { dateSelectionCacheKey } from "@/shared/types/scope";
 
 // Every data-fetching hook keys on dateSelectionCacheKey so Today/Tomorrow/Custom
@@ -18,10 +18,20 @@ export const queryKeys = {
     dcs: (params: { state?: string; node?: string; se?: string; offset?: number }) =>
       ["directory", "dcs", params] as const,
   },
-  scope: (segment: string, scopeValue: string, date: DateSelection) =>
-    ["scope", segment, scopeValue, dateSelectionCacheKey(date)] as const,
-  tuff: (scopeType: string, scopeValue: string, date: DateSelection) =>
-    ["tuff", scopeType, scopeValue, dateSelectionCacheKey(date)] as const,
+  scope: (
+    segment: string,
+    scopeValue: string,
+    date: DateSelection,
+    routingPlan: RoutingPlanChoice,
+    enableRotation: boolean,
+  ) => ["scope", segment, scopeValue, dateSelectionCacheKey(date), routingPlan, enableRotation] as const,
+  tuff: (
+    scopeType: string,
+    scopeValue: string,
+    date: DateSelection,
+    routingPlan: RoutingPlanChoice,
+    enableRotation: boolean,
+  ) => ["tuff", scopeType, scopeValue, dateSelectionCacheKey(date), routingPlan, enableRotation] as const,
   routes: (se: string, planDate: string, planRun?: string) =>
     ["routes", se, planDate, planRun ?? "latest"] as const,
   pitch: (dailyTaskId: number) => ["pitch", dailyTaskId] as const,

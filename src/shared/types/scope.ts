@@ -69,3 +69,19 @@ export function dateSelectionCacheKey(selection: DateSelection): string {
     ? `custom:${selection.date}`
     : selection.type;
 }
+
+// ?routing_plan=A|B on every scope/tuff generation endpoint (planning/views.py
+// _routing_plan_choice_from_get, added 2026-08-31) - which of the Routing Agent's two
+// families of 3 route models to generate/persist for a PlanRun: Plan A (Priority-Max/
+// Distance-Min/Balanced) or Plan B (Beat Planning / Cluster-Based: Efficiency/Score-Max/
+// Distance-Min). Omitted (undefined) defaults to Plan A server-side, same as the CLI.
+export type RoutingPlanChoice = "A" | "B";
+
+// ?rotation=true on the same endpoints (planning/views.py _generate_and_respond/tuff,
+// added 2026-09-01) - Plan B only (Beat_Planning_Routing_Agent_Cluster_Model.xlsx Sheet
+// 11 Model B, "Fixed Rotation"): restricts each SE's candidates to today's assigned beat
+// zone before ranking. Silently ignored server-side when routingPlan is "A" (planning/
+// routing.py: `if enable_rotation and plan_choice == "B"`) - kept off by default since
+// it's a real behavior change (a DC outside today's zone becomes invisible this cycle
+// even if it would otherwise rank #1), same posture as Plan A/B itself.
+export type RotationChoice = boolean;

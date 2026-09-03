@@ -69,16 +69,20 @@ export function useSEs(state?: string, node?: string) {
   });
 }
 
-export function useDCs(params: {
-  state?: string;
-  node?: string;
-  se?: string;
-  limit?: number;
-  offset?: number;
-}) {
+export function useDCs(
+  params: {
+    state?: string;
+    node?: string;
+    se?: string;
+    limit?: number;
+    offset?: number;
+  },
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: queryKeys.directory.dcs(params),
     queryFn: () => directoryApi.dcs(params),
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled,
   });
 }
