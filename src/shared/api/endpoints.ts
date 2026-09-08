@@ -1,4 +1,12 @@
-import { apiGet, apiGetPaginated } from "@/shared/api/client";
+import { apiGet, apiGetPaginated, apiPost, apiPostForm, apiUrl } from "@/shared/api/client";
+import type { AdminConfigResponse } from "@/shared/types/adminConfig";
+import type {
+  DCSelectionState,
+  DCSelectionRules,
+  DCSelectionSearchResult,
+  DCSelectionFilterMode,
+  DCSelectionUploadResult,
+} from "@/shared/types/dcSelection";
 import type {
   StateOption,
   NodeOption,
@@ -180,4 +188,60 @@ export const runsApi = {
 
   get: (planRunId: string) =>
     apiGet<PlanRunResponse>(`/runs/${encodeURIComponent(planRunId)}/`),
+};
+
+// ---------------------------------------------------------------------------
+// Admin Control Panel (added 2026-09-07) - live-editable BusinessConstants overrides.
+// ---------------------------------------------------------------------------
+export const adminApi = {
+  getConfig: () => apiGet<AdminConfigResponse>("/admin/config/"),
+
+  // `changes` - {field_key: new_value}; `reset` - field_keys to revert to their
+  // hardcoded default. Either can be empty/omitted; both are applied in one request
+  // (reset first, then changes, per planning/views.py's admin_pipeline_config).
+  updateConfig: (changes: Record<string, number>, reset: string[] = [], actor?: string) =>
+    apiPost<AdminConfigResponse>("/admin/config/", { changes, reset, actor }),
+};
+
+// ---------------------------------------------------------------------------
+// DC Selection (added 2026-09-08) - replaces the Excel Top DC list with an
+// admin-configurable AND/OR rule over dc_datamart + an uploadable DC_RAnk.csv,
+// plus manual include/exclude. See planning/dc_selection.py's module docstring.
+// ---------------------------------------------------------------------------
+export const dcSelectionApi = {
+  getState: () => apiGet<DCSelectionState>("/admin/dc-selection/"),
+
+  // Any subset of the three; omit a key to leave it untouched server-side.
+  update: (
+    changes: { rules?: DCSelectionRules; manual_includes?: string[]; manual_excludes?: string[] },
+    actor?: string,
+  ) => apiPost<DCSelectionState>("/admin/dc-selection/", { ...changes, actor }),
+
+  search: (params?: { q?: string; limit?: number; offset?: number; filter_mode?: DCSelectionFilterMode }) =>
+    apiGet<DCSelectionSearchResult>("/admin/dc-selection/search/", params),
+
+  uploadRankCsv: (file: File, actor?: string) => {
+    const form = new FormData();
+    form.set("file", file);
+    if (actor) form.set("actor", actor);
+    return apiPostForm<DCSelectionState>("/admin/dc-selection/upload-rank-csv/", form);
+  },
+
+  // Selected DC List uploader (added 2026-09-08) - a file-based alternative to Bulk
+  // Paste; adds the file's DC IDs to Manual_Includes (see dc_selection.upload_selected_
+  // dcs's own docstring for the merge, not replace, semantics) and returns each
+  // uploaded ID's Rank/Cohort (from DC_RAnk.csv) plus whether it was actually found
+  // there - explicit user request, "on uploading the partner it will get rank from
+  // dc_rank and cohort also get".
+  uploadSelectedDcs: (file: File, actor?: string) => {
+    const form = new FormData();
+    form.set("file", file);
+    if (actor) form.set("actor", actor);
+    return apiPostForm<DCSelectionUploadResult>("/admin/dc-selection/upload-selected-dcs/", form);
+  },
+
+  // Plain hrefs (real browser GET + Content-Disposition: attachment), not apiGet calls -
+  // these download a sample file, they don't return JSON.
+  sampleRankCsvUrl: () => apiUrl("/admin/dc-selection/sample-rank-csv/"),
+  sampleSelectedDcsCsvUrl: () => apiUrl("/admin/dc-selection/sample-selected-dcs-csv/"),
 };

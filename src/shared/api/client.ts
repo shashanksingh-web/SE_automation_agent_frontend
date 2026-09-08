@@ -42,9 +42,19 @@ function buildUrl(path: string, params?: QueryParams): string {
   return `${BASE_URL}${path}${query ? `?${query}` : ""}`;
 }
 
-// All 28 endpoints are GET-only, JSON, no auth (spec §1). This wrapper is intentionally
-// thin: no auth headers, no retry-on-401 - none of that applies to this backend contract.
-// App-shell login (§4) is a separate concern layered on top, not part of this client.
+// Every endpoint was GET-only, JSON, no auth (spec §1) until the Admin Control Panel
+// (added 2026-09-07) - its one write path (POST /admin/config/) is unauthenticated same
+// as everything else here (see PipelineSettings.updated_by's own backend docstring for
+// why), just no longer read-only. This wrapper is intentionally thin: no auth headers,
+// no retry-on-401 - none of that applies to this backend contract. App-shell login (§4)
+// is a separate concern layered on top, not part of this client.
+// Exposes buildUrl for the rare case a caller needs a plain href rather than a fetch
+// wrapper - currently only DC Selection's sample-CSV download links (a real browser
+// <a href> GET, not a JSON response apiGet could return).
+export function apiUrl(path: string, params?: QueryParams): string {
+  return buildUrl(path, params);
+}
+
 export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
   const url = buildUrl(path, params);
   const res = await fetch(url, {
@@ -63,6 +73,63 @@ export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> 
       res.status,
       body,
       body?.error ?? `Request to ${path} failed with ${res.status}`,
+    );
+  }
+
+  return (await res.json()) as T;
+}
+
+// POST counterpart to apiGet - currently only /admin/config/ uses this. csrf_exempt on
+// the backend (no session/auth system exists anywhere in this API), so no CSRF token is
+// sent here either - same trust boundary as every GET call, just a mutation this time.
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let errBody: ApiErrorBody | null = null;
+    try {
+      errBody = (await res.json()) as ApiErrorBody;
+    } catch {
+      // response wasn't JSON; leave body null
+    }
+    throw new ApiError(
+      res.status,
+      errBody,
+      errBody?.error ?? `Request to ${path} failed with ${res.status}`,
+    );
+  }
+
+  return (await res.json()) as T;
+}
+
+// Multipart counterpart to apiPost - only DC Selection's rank/cohort CSV uploader
+// (added 2026-09-08) needs a file body. No Content-Type header set here on purpose -
+// the browser sets its own multipart boundary when given a FormData body; setting one
+// manually would drop the boundary parameter and break parsing server-side.
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: form,
+  });
+
+  if (!res.ok) {
+    let errBody: ApiErrorBody | null = null;
+    try {
+      errBody = (await res.json()) as ApiErrorBody;
+    } catch {
+      // response wasn't JSON; leave body null
+    }
+    throw new ApiError(
+      res.status,
+      errBody,
+      errBody?.error ?? `Request to ${path} failed with ${res.status}`,
     );
   }
 

@@ -46,4 +46,8 @@ export const queryKeys = {
   runs: (scopeType?: string, scopeValue?: string, status?: string) =>
     ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all"] as const,
   run: (planRunId: string) => ["runs", "detail", planRunId] as const,
+  adminConfig: () => ["admin-config"] as const,
+  dcSelection: () => ["dc-selection"] as const,
+  dcSelectionSearch: (q: string, filterMode: string, offset: number) =>
+    ["dc-selection", "search", q, filterMode, offset] as const,
 };

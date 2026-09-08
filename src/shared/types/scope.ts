@@ -47,7 +47,10 @@ export type ViewType =
   | "ops"
   | "district"
   | "block"
-  | "node";
+  | "node"
+  // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
+  // ADMIN role only (see resolveDefaultView in features/rbac/rbac.ts).
+  | "admin";
 
 export type DateSelection =
   | { type: "today" }

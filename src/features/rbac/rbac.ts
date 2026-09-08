@@ -54,6 +54,9 @@ export function resolveDefaultView(user: AuthenticatedUser): RoleResolution {
         allowedViewTypes: [
           "overall",
           "ops",
+          // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
+          // ADMIN role only.
+          "admin",
           "zbm",
           "state",
           "district",
