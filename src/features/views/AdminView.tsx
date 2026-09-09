@@ -7,8 +7,16 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Badge } from "@/shared/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
 import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
+
+// "DC Selection" is also planning/admin_config.py's own group name for two unrelated
+// numeric thresholds (GR-28/90+-day-boost overdue minimums) - renamed here for the tab
+// label only (not the underlying group key used for lookups/edits) so it doesn't read
+// as the same thing as the Program DC List tab below.
+const PROGRAM_DC_LIST_TAB = "program-dc-list";
+const tabLabel = (group: string) => (group === "DC Selection" ? "DC Selection Thresholds" : group);
 
 // Admin Control Panel (added 2026-09-07, explicit user request - "add the new tab for
 // admin control panel", built off the SE_Daily_Task_Agent_Pipeline_Walkthrough sheet's
@@ -143,36 +151,55 @@ export function AdminView() {
         </div>
       </div>
 
-      <DCSelectionPanel />
+      <Tabs defaultValue={PROGRAM_DC_LIST_TAB}>
+        <TabsList className="flex h-auto flex-wrap justify-start gap-1 p-1">
+          <TabsTrigger value={PROGRAM_DC_LIST_TAB}>Program DC List</TabsTrigger>
+          {data.Groups.map((group) => (
+            <TabsTrigger key={group.Group} value={group.Group}>
+              {tabLabel(group.Group)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {data.Groups.map((group) => (
-        <Card key={group.Group}>
-          <CardHeader>
-            <CardTitle>{group.Group}</CardTitle>
-            {group.Group === "Health Score" && healthWeightSum != null && (
-              <CardDescription>
-                7 weights should sum to 1.0 - currently{" "}
-                <span className={Math.abs(healthWeightSum - 1) > 0.001 ? "font-medium text-destructive" : "font-medium text-primary"}>
-                  {healthWeightSum.toFixed(2)}
-                </span>
-              </CardDescription>
-            )}
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {group.Fields.map((field) => (
-              <FieldEditor
-                key={field.key}
-                field={field}
-                pendingValue={pendingEdits[field.key]}
-                error={saveErrors[field.key]}
-                onChange={(raw) => setEdit(field, raw)}
-                onReset={() => handleReset(field.key)}
-                busy={updateConfig.isPending}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      ))}
+        {/* forceMount on every tab keeps them all mounted (just hidden) rather than
+            unmounting on switch - DCSelectionPanel stages its own rule edits locally
+            (pendingRules etc.), which would silently be lost on remount if an admin
+            switched tabs mid-edit without saving or discarding first. */}
+        <TabsContent value={PROGRAM_DC_LIST_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
+          <DCSelectionPanel />
+        </TabsContent>
+
+        {data.Groups.map((group) => (
+          <TabsContent key={group.Group} value={group.Group} forceMount className="mt-4 data-[state=inactive]:hidden">
+            <Card>
+              <CardHeader>
+                <CardTitle>{group.Group}</CardTitle>
+                {group.Group === "Health Score" && healthWeightSum != null && (
+                  <CardDescription>
+                    7 weights should sum to 1.0 - currently{" "}
+                    <span className={Math.abs(healthWeightSum - 1) > 0.001 ? "font-medium text-destructive" : "font-medium text-primary"}>
+                      {healthWeightSum.toFixed(2)}
+                    </span>
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {group.Fields.map((field) => (
+                  <FieldEditor
+                    key={field.key}
+                    field={field}
+                    pendingValue={pendingEdits[field.key]}
+                    error={saveErrors[field.key]}
+                    onChange={(raw) => setEdit(field, raw)}
+                    onReset={() => handleReset(field.key)}
+                    busy={updateConfig.isPending}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
 
       {data.Updated_At && (
         <div className="text-xs text-muted-foreground">
