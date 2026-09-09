@@ -212,6 +212,16 @@ export const adminApi = {
 export const dcSelectionApi = {
   getState: () => apiGet<DCSelectionState>("/admin/dc-selection/"),
 
+  // Read-only - never persists. Explicit user request ("reflection of count before save
+  // rule"): computes Selected_Count for an in-progress, not-yet-saved rule edit so the
+  // panel can show a live count while checkboxes are still being toggled, instead of
+  // only after Save rule. upload_mode omitted uses whatever mode is currently stored.
+  previewSelection: (rules: DCSelectionRules, uploadMode?: DCSelectionUploadMode) =>
+    apiPost<{ Selected_Count: number | null; Universe_Size: number; Live_Query_Ok: boolean }>(
+      "/admin/dc-selection/preview/",
+      { rules, upload_mode: uploadMode },
+    ),
+
   // Any subset of the four; omit a key to leave it untouched server-side. A rank_range
   // rule matching zero DCs is rejected by the backend (400) - see update_selection's
   // own docstring - so callers should catch ApiError and surface `body.error`.

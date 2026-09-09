@@ -4,6 +4,7 @@ import { useAuth } from "@/features/auth/AuthContext";
 import { dcSelectionApi } from "@/shared/api/endpoints";
 import {
   useDCSelection,
+  useDCSelectionPreview,
   useDCSelectionSearch,
   useUpdateDCSelection,
   useUploadDCSelectionRankCsv,
@@ -45,6 +46,10 @@ export function DCSelectionPanel() {
   const [pendingRules, setPendingRules] = useState<DCSelectionRules | null>(null);
   const rules = pendingRules ?? data?.Rules ?? null;
   const rulesDirty = pendingRules !== null;
+  // Only queries while there's an actual unsaved edit (see the hook's own docstring) -
+  // once saved, useDCSelection's own Selected_Count already reflects it, no need for
+  // a second, redundant computation of the same thing.
+  const preview = useDCSelectionPreview(rulesDirty ? pendingRules : null, data?.Upload_Mode ?? "uploaded_plus_filter");
 
   const [bulkIncludeText, setBulkIncludeText] = useState("");
   const [bulkExcludeText, setBulkExcludeText] = useState("");
@@ -191,7 +196,16 @@ export function DCSelectionPanel() {
             </span>
             {rulesDirty && (
               <Badge variant="warning">
-                Unsaved changes below - this count won't reflect them until you click Save rule
+                {preview.isFetching && preview.data === undefined ? (
+                  <>
+                    <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                    Previewing unsaved changes...
+                  </>
+                ) : preview.data ? (
+                  <>Unsaved changes would select {preview.data.Selected_Count ?? "—"} DCs - click Save rule to apply</>
+                ) : (
+                  "Unsaved changes below - this count won't reflect them until you click Save rule"
+                )}
               </Badge>
             )}
             {!data.Live_Query_Ok && (

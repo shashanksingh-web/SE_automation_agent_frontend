@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { dcSelectionApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
@@ -67,6 +68,30 @@ export function useUploadDCSelectionSelectedDcs() {
       queryClient.setQueryData(queryKeys.dcSelection(), data);
       queryClient.invalidateQueries({ queryKey: ["dc-selection", "search"] });
     },
+  });
+}
+
+// Live preview of Selected_Count for an unsaved rule edit (explicit user request,
+// "reflection of count before save rule") - debounced so a rank-range min/max keystroke
+// doesn't fire a request per character. `rules`/`uploadMode` are only passed while the
+// panel actually has a pending (unsaved) edit; pass null to disable (see `enabled`
+// below) rather than calling this with the already-saved rule, which would just
+// duplicate useDCSelection's own Selected_Count for no benefit.
+export function useDCSelectionPreview(rules: DCSelectionRules | null, uploadMode: DCSelectionUploadMode) {
+  const [debounced, setDebounced] = useState(rules);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(rules), 400);
+    return () => clearTimeout(timer);
+  }, [rules]);
+
+  return useQuery({
+    queryKey: queryKeys.dcSelectionPreview(JSON.stringify(debounced), uploadMode),
+    queryFn: () => dcSelectionApi.previewSelection(debounced as DCSelectionRules, uploadMode),
+    enabled: debounced !== null,
+    // Keeps the last preview number on screen while the debounced request for the next
+    // edit is in flight, instead of flashing to a loading state on every keystroke.
+    placeholderData: (previous) => previous,
   });
 }
 
