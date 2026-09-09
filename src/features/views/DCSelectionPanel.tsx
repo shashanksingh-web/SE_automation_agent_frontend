@@ -189,6 +189,11 @@ export function DCSelectionPanel() {
             <span className="text-muted-foreground">
               {data.Selected_Count ?? "—"} / {data.Universe_Size} DCs selected
             </span>
+            {rulesDirty && (
+              <Badge variant="warning">
+                Unsaved changes below - this count won't reflect them until you click Save rule
+              </Badge>
+            )}
             {!data.Live_Query_Ok && (
               <Badge variant="warning">dc_datamart query failed - Active/Overdue criteria can't match right now</Badge>
             )}
