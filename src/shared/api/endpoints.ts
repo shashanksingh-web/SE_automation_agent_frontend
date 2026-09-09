@@ -6,6 +6,7 @@ import type {
   DCSelectionSearchResult,
   DCSelectionFilterMode,
   DCSelectionUploadResult,
+  DCSelectionUploadMode,
 } from "@/shared/types/dcSelection";
 import type {
   StateOption,
@@ -211,9 +212,16 @@ export const adminApi = {
 export const dcSelectionApi = {
   getState: () => apiGet<DCSelectionState>("/admin/dc-selection/"),
 
-  // Any subset of the three; omit a key to leave it untouched server-side.
+  // Any subset of the four; omit a key to leave it untouched server-side. A rank_range
+  // rule matching zero DCs is rejected by the backend (400) - see update_selection's
+  // own docstring - so callers should catch ApiError and surface `body.error`.
   update: (
-    changes: { rules?: DCSelectionRules; manual_includes?: string[]; manual_excludes?: string[] },
+    changes: {
+      rules?: DCSelectionRules;
+      manual_includes?: string[];
+      manual_excludes?: string[];
+      upload_mode?: DCSelectionUploadMode;
+    },
     actor?: string,
   ) => apiPost<DCSelectionState>("/admin/dc-selection/", { ...changes, actor }),
 
@@ -227,16 +235,17 @@ export const dcSelectionApi = {
     return apiPostForm<DCSelectionState>("/admin/dc-selection/upload-rank-csv/", form);
   },
 
-  // Selected DC List uploader (added 2026-09-08) - a file-based alternative to Bulk
-  // Paste; adds the file's DC IDs to Manual_Includes (see dc_selection.upload_selected_
-  // dcs's own docstring for the merge, not replace, semantics) and returns each
-  // uploaded ID's Rank/Cohort (from DC_RAnk.csv) plus whether it was actually found
-  // there - explicit user request, "on uploading the partner it will get rank from
-  // dc_rank and cohort also get".
-  uploadSelectedDcs: (file: File, actor?: string) => {
+  // Selected DC List uploader - REWRITTEN 2026-09-08 per direct spec: dc_datamart is
+  // checked first (the gate - a genuinely-absent ID is rejected, not added to Manual
+  // Includes), DC_RAnk.csv second for Rank/Cohort (soft - missing there doesn't
+  // reject). `uploadMode` is optional - set alongside the file per direct instruction
+  // ("the mode is chosen at upload time"); omit to leave whatever mode is already
+  // stored untouched.
+  uploadSelectedDcs: (file: File, actor?: string, uploadMode?: DCSelectionUploadMode) => {
     const form = new FormData();
     form.set("file", file);
     if (actor) form.set("actor", actor);
+    if (uploadMode) form.set("upload_mode", uploadMode);
     return apiPostForm<DCSelectionUploadResult>("/admin/dc-selection/upload-selected-dcs/", form);
   },
 

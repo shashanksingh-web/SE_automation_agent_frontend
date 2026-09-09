@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { dcSelectionApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
-import type { DCSelectionFilterMode, DCSelectionRules } from "@/shared/types/dcSelection";
+import type { DCSelectionFilterMode, DCSelectionRules, DCSelectionUploadMode } from "@/shared/types/dcSelection";
 
 // DC Selection (added 2026-09-08) - same "write result straight into cache" pattern as
 // useAdminConfig: a save/upload reflects the new Selected_Count/Configured instantly
@@ -20,13 +20,15 @@ export function useUpdateDCSelection() {
       rules,
       manual_includes,
       manual_excludes,
+      upload_mode,
       actor,
     }: {
       rules?: DCSelectionRules;
       manual_includes?: string[];
       manual_excludes?: string[];
+      upload_mode?: DCSelectionUploadMode;
       actor?: string;
-    }) => dcSelectionApi.update({ rules, manual_includes, manual_excludes }, actor),
+    }) => dcSelectionApi.update({ rules, manual_includes, manual_excludes, upload_mode }, actor),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.dcSelection(), data);
       // A rule/manual-list change can flip in_selection for any row currently shown by
@@ -52,8 +54,15 @@ export function useUploadDCSelectionRankCsv() {
 export function useUploadDCSelectionSelectedDcs() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, actor }: { file: File; actor?: string }) =>
-      dcSelectionApi.uploadSelectedDcs(file, actor),
+    mutationFn: ({
+      file,
+      actor,
+      uploadMode,
+    }: {
+      file: File;
+      actor?: string;
+      uploadMode?: DCSelectionUploadMode;
+    }) => dcSelectionApi.uploadSelectedDcs(file, actor, uploadMode),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.dcSelection(), data);
       queryClient.invalidateQueries({ queryKey: ["dc-selection", "search"] });

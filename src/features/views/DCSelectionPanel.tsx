@@ -18,7 +18,12 @@ import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/shared/components/ui/table";
-import type { DCSelectionCombine, DCSelectionFilterMode, DCSelectionRules } from "@/shared/types/dcSelection";
+import type {
+  DCSelectionCombine,
+  DCSelectionFilterMode,
+  DCSelectionRules,
+  DCSelectionUploadMode,
+} from "@/shared/types/dcSelection";
 
 const COHORT_OPTIONS = ["Strategic", "Growth", "Opportunity", "Long Tail"];
 
@@ -43,6 +48,7 @@ export function DCSelectionPanel() {
 
   const [bulkIncludeText, setBulkIncludeText] = useState("");
   const [bulkExcludeText, setBulkExcludeText] = useState("");
+  const [uploadModeForFile, setUploadModeForFile] = useState<DCSelectionUploadMode | "">("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<DCSelectionFilterMode>("all");
@@ -63,14 +69,21 @@ export function DCSelectionPanel() {
     );
   };
 
-  const handleDiscardRules = () => setPendingRules(null);
+  const handleDiscardRules = () => {
+    setPendingRules(null);
+    updateSelection.reset();
+  };
 
   const handleUpload = (file: File) => {
     uploadRankCsv.mutate({ file, actor });
   };
 
   const handleUploadSelectedDcs = (file: File) => {
-    uploadSelectedDcs.mutate({ file, actor });
+    uploadSelectedDcs.mutate({ file, actor, uploadMode: uploadModeForFile || undefined });
+  };
+
+  const handleUploadModeChange = (mode: DCSelectionUploadMode) => {
+    updateSelection.mutate({ upload_mode: mode, actor });
   };
 
   const toggleManual = (dcId: string, list: "include" | "exclude", add: boolean) => {
@@ -162,6 +175,11 @@ export function DCSelectionPanel() {
               </Button>
             </div>
           </div>
+          {updateSelection.isError && (
+            <div className="mt-2 text-xs text-destructive">
+              {(updateSelection.error as { body?: { error?: string } })?.body?.error ?? "Could not save"}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -176,6 +194,29 @@ export function DCSelectionPanel() {
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+            <Label className="text-sm font-medium">Upload mode</Label>
+            <Select
+              value={data.Upload_Mode}
+              onValueChange={(v) => handleUploadModeChange(v as DCSelectionUploadMode)}
+              disabled={updateSelection.isPending}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="uploaded_plus_filter">Uploaded list + optional filter</SelectItem>
+                <SelectItem value="uploaded_only">Uploaded list only</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">
+              {data.Upload_Mode === "uploaded_only"
+                ? "The rule below is suppressed - only Manual Includes/Excludes decide the selection."
+                : "The rule below is unioned with Manual Includes/Excludes."}
+            </span>
+          </div>
+
+          <div className={data.Upload_Mode === "uploaded_only" ? "space-y-4 opacity-50" : "space-y-4"}>
           <CriterionRow
             label="Rank range"
             enabled={rules.rank_range.enabled}
@@ -254,21 +295,23 @@ export function DCSelectionPanel() {
             onEnabledChange={(enabled) => setRule("overdue", { enabled })}
             onCombineChange={(combine) => setRule("overdue", { combine })}
           >
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-muted-foreground">Overdue &gt;</span>
-              <Input
-                type="number"
-                className="w-28"
-                value={rules.overdue.min_amount}
-                onChange={(e) => setRule("overdue", { min_amount: Number(e.target.value) || 0 })}
-              />
-            </div>
+            <Select value={rules.overdue.value} onValueChange={(v) => setRule("overdue", { value: v as "yes" | "no" })}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yes">Has overdue</SelectItem>
+                <SelectItem value="no">No overdue</SelectItem>
+              </SelectContent>
+            </Select>
           </CriterionRow>
 
           <p className="text-[11px] text-muted-foreground">
             AND narrows the selection (a DC must also match); OR adds DCs matching that criterion on top of
-            whatever the AND criteria selected, regardless of rank/cohort/status.
+            whatever the AND criteria selected, regardless of rank/cohort/status. A Rank range matching zero
+            DCs is rejected on save.
           </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -319,9 +362,9 @@ export function DCSelectionPanel() {
         <CardHeader>
           <CardTitle className="text-base">Selected DC List uploader</CardTitle>
           <CardDescription>
-            Upload a file of DC IDs (one per row, header optional) to select in one go - each ID is looked up
-            against DC_RAnk.csv for its Rank/Cohort, then added to Manual Includes (unioned into the final
-            selection on top of the rule above, same as the Bulk Paste tab below).
+            Upload a file of DC IDs (one per row, header optional) - each is checked against dc_datamart first
+            (rejected outright if genuinely absent there), then looked up in DC_RAnk.csv for Rank/Cohort
+            (missing there is just enrichment, not a rejection). Accepted IDs are added to Manual Includes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -344,25 +387,43 @@ export function DCSelectionPanel() {
                 </span>
               </Button>
             </label>
+            <Select value={uploadModeForFile} onValueChange={(v) => setUploadModeForFile(v as DCSelectionUploadMode)}>
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Keep current upload mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="uploaded_plus_filter">Set mode: + optional filter</SelectItem>
+                <SelectItem value="uploaded_only">Set mode: uploaded list only</SelectItem>
+              </SelectContent>
+            </Select>
             <SampleFormatLink href={dcSelectionApi.sampleSelectedDcsCsvUrl()} />
-            {uploadSelectedDcs.isSuccess && (
-              <span className="text-xs text-muted-foreground">
-                Added {uploadSelectedDcs.data.Uploaded_Dc_Count ?? "?"} DC ID(s) to Manual Includes.
-              </span>
-            )}
-            {uploadSelectedDcs.isError && (
-              <span className="text-xs text-destructive">
-                {(uploadSelectedDcs.error as { body?: { error?: string } })?.body?.error ?? "Upload failed"}
-              </span>
-            )}
           </div>
+          {uploadSelectedDcs.isSuccess && (
+            <span className="text-xs text-muted-foreground">
+              Accepted {uploadSelectedDcs.data.Uploaded_Accepted_Count ?? "?"} of {uploadSelectedDcs.data.Uploaded_Dc_Count ?? "?"}{" "}
+              uploaded DC ID(s) into Manual Includes.
+            </span>
+          )}
+          {uploadSelectedDcs.isError && (
+            <div className="text-xs text-destructive">
+              {(uploadSelectedDcs.error as { body?: { error?: string } })?.body?.error ?? "Upload failed"}
+            </div>
+          )}
+
+          {uploadSelectedDcs.isSuccess && uploadSelectedDcs.data.Uploaded_Dc_Datamart_Unverified && (
+            <div className="flex items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              The dc_datamart query failed for this upload - nothing could be checked, so every ID was accepted
+              rather than wrongly rejected.
+            </div>
+          )}
 
           {uploadSelectedDcs.isSuccess && (uploadSelectedDcs.data.Uploaded_Not_Found_Count ?? 0) > 0 && (
             <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
               <div className="flex items-center gap-1.5 text-sm font-medium text-destructive">
                 <AlertTriangle className="h-4 w-4" />
                 {uploadSelectedDcs.data.Uploaded_Not_Found_Count} of {uploadSelectedDcs.data.Uploaded_Dc_Count} uploaded DC ID(s)
-                not found in DC_RAnk.csv
+                rejected - not found in dc_datamart
               </div>
               <ul className="space-y-1.5 text-xs">
                 {uploadSelectedDcs.data.Uploaded_Dcs?.filter((dc) => !dc.found).map((dc) => (
@@ -384,7 +445,10 @@ export function DCSelectionPanel() {
                     <TableHead>Name</TableHead>
                     <TableHead>Rank</TableHead>
                     <TableHead>Cohort</TableHead>
-                    <TableHead>Found in DC_RAnk.csv</TableHead>
+                    <TableHead>Active</TableHead>
+                    <TableHead>Overdue</TableHead>
+                    <TableHead>Accepted</TableHead>
+                    <TableHead>In Rank &amp; Cohort file</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -396,11 +460,16 @@ export function DCSelectionPanel() {
                       </TableCell>
                       <TableCell>{typeof dc.rank === "number" ? dc.rank : (dc.rank ?? "—")}</TableCell>
                       <TableCell>{dc.cohort ?? "—"}</TableCell>
+                      <TableCell>{dc.is_active === null ? "—" : dc.is_active ? "Yes" : "No"}</TableCell>
+                      <TableCell>{dc.overdue ?? "—"}</TableCell>
                       <TableCell>
-                        {dc.found ? (
+                        {dc.found ? <Badge variant="default">accepted</Badge> : <Badge variant="destructive">rejected</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        {dc.in_rank_csv ? (
                           <Badge variant="default">yes</Badge>
                         ) : (
-                          <Badge variant="warning">not found - selected anyway</Badge>
+                          <Badge variant="warning">no rank/cohort yet</Badge>
                         )}
                       </TableCell>
                     </TableRow>
