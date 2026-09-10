@@ -195,6 +195,17 @@ export const runsApi = {
 
   get: (planRunId: string) =>
     apiGet<PlanRunResponse>(`/runs/${encodeURIComponent(planRunId)}/`),
+
+  // Added 2026-09-10, explicit user request - "system run plan means it will generate
+  // the plan for all se with eligible dc". Fires a detached background subprocess
+  // server-side (planning/management/commands/run_all_states_tuff.py) covering every
+  // STATE - returns immediately; new PlanRuns simply appear via `list` above as each
+  // state finishes, there is no separate progress endpoint by design.
+  generateAllStates: (planDate?: string, actor?: string) =>
+    apiPost<{ started: boolean; log_file: string; message: string }>("/admin/generate-all-states/", {
+      plan_date: planDate || undefined,
+      actor,
+    }),
 };
 
 // ---------------------------------------------------------------------------

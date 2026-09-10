@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
-import { useRunsList, useRunDetail } from "@/shared/api/hooks/useRuns";
+import { ChevronLeft, Loader2, PlayCircle } from "lucide-react";
+import { useAuth } from "@/features/auth/AuthContext";
+import { useRunsList, useRunDetail, useGenerateAllStates } from "@/shared/api/hooks/useRuns";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -32,12 +33,19 @@ const STATUS_BADGE: Record<string, "default" | "secondary" | "destructive" | "wa
 // the same detail view RunsHistoryPanel already uses (PlanRunDetail + Pitch/DCCard/
 // Route drawers) so there's one shared "look at a run" experience, not two.
 export function AllPlanRunsPanel() {
+  const { user } = useAuth();
+  const actor = user?.email ?? user?.name;
+
   const [scopeType, setScopeType] = useState("");
   const [scopeValue, setScopeValue] = useState("");
   const [status, setStatus] = useState("");
   const [planDate, setPlanDate] = useState("");
   const [offset, setOffset] = useState(0);
   const limit = 25;
+
+  const [generateDate, setGenerateDate] = useState("");
+  const [confirmingGenerate, setConfirmingGenerate] = useState(false);
+  const generateAllStates = useGenerateAllStates();
 
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
@@ -62,6 +70,17 @@ export function AllPlanRunsPanel() {
     setOffset(0);
   };
 
+  const handleGenerateAllClick = () => {
+    if (!confirmingGenerate) {
+      setConfirmingGenerate(true);
+      return;
+    }
+    generateAllStates.mutate(
+      { planDate: generateDate || undefined, actor },
+      { onSettled: () => setConfirmingGenerate(false) },
+    );
+  };
+
   const anyFilterActive = scopeType || scopeValue || status || planDate;
   const total = listQuery.data?.totalCount ?? 0;
   const rows = listQuery.data?.data ?? [];
@@ -70,11 +89,54 @@ export function AllPlanRunsPanel() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>System Plan Runs</CardTitle>
-          <CardDescription>
-            Every PlanRun ever generated, network-wide - filter by scope, status, or plan date. Click a row for
-            its full task list, pitches, DC cards, and route plans.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>System Plan Runs</CardTitle>
+              <CardDescription>
+                Every PlanRun ever generated, network-wide - filter by scope, status, or plan date. Click a row
+                for its full task list, pitches, DC cards, and route plans.
+              </CardDescription>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-3">
+            <Input
+              type="date"
+              className="w-40"
+              value={generateDate}
+              onChange={(e) => setGenerateDate(e.target.value)}
+              placeholder="Today"
+              disabled={generateAllStates.isPending}
+            />
+            {confirmingGenerate ? (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  This generates a fresh plan for every SE network-wide (all states, eligible DCs only) - takes
+                  real minutes and hits live data. Confirm?
+                </span>
+                <Button size="sm" variant="destructive" onClick={handleGenerateAllClick} disabled={generateAllStates.isPending}>
+                  {generateAllStates.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+                  Yes, generate for all states
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmingGenerate(false)} disabled={generateAllStates.isPending}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={handleGenerateAllClick} disabled={generateAllStates.isPending}>
+                <PlayCircle className="h-4 w-4" />
+                Generate for all states
+              </Button>
+            )}
+            {generateAllStates.isSuccess && (
+              <span className="text-xs text-muted-foreground">{generateAllStates.data.message}</span>
+            )}
+            {generateAllStates.isError && (
+              <span className="text-xs text-destructive">
+                {(generateAllStates.error as { body?: { error?: string } })?.body?.error ?? "Could not start generation"}
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
