@@ -10,12 +10,18 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
 import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
+import { AllPlanRunsPanel } from "@/features/views/AllPlanRunsPanel";
 
 // "DC Selection" is also planning/admin_config.py's own group name for two unrelated
 // numeric thresholds (GR-28/90+-day-boost overdue minimums) - renamed here for the tab
 // label only (not the underlying group key used for lookups/edits) so it doesn't read
 // as the same thing as the Program DC List tab below.
 const PROGRAM_DC_LIST_TAB = "program-dc-list";
+// Added 2026-09-10, explicit user request - "add one more tab where all system plan
+// created with all filter". See AllPlanRunsPanel for the full scope_type/scope_value/
+// status/plan_date filter set (RunsHistoryPanel's own drawer only ever had a status
+// chip row).
+const ALL_RUNS_TAB = "all-plan-runs";
 const tabLabel = (group: string) => (group === "DC Selection" ? "DC Selection Thresholds" : group);
 
 // Admin Control Panel (added 2026-09-07, explicit user request - "add the new tab for
@@ -154,6 +160,7 @@ export function AdminView() {
       <Tabs defaultValue={PROGRAM_DC_LIST_TAB}>
         <TabsList className="flex h-auto flex-wrap justify-start gap-1 p-1">
           <TabsTrigger value={PROGRAM_DC_LIST_TAB}>Program DC List</TabsTrigger>
+          <TabsTrigger value={ALL_RUNS_TAB}>System Plan Runs</TabsTrigger>
           {data.Groups.map((group) => (
             <TabsTrigger key={group.Group} value={group.Group}>
               {tabLabel(group.Group)}
@@ -167,6 +174,10 @@ export function AdminView() {
             switched tabs mid-edit without saving or discarding first. */}
         <TabsContent value={PROGRAM_DC_LIST_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
           <DCSelectionPanel />
+        </TabsContent>
+
+        <TabsContent value={ALL_RUNS_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
+          <AllPlanRunsPanel />
         </TabsContent>
 
         {data.Groups.map((group) => (

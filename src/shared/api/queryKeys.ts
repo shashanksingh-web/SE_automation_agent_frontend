@@ -43,8 +43,8 @@ export const queryKeys = {
     ["completion-stats", se ?? "all", objective ?? "all"] as const,
   scheduledScopes: (active?: boolean, scopeType?: string) =>
     ["scheduled-scopes", active ?? "all", scopeType ?? "all"] as const,
-  runs: (scopeType?: string, scopeValue?: string, status?: string) =>
-    ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all"] as const,
+  runs: (scopeType?: string, scopeValue?: string, status?: string, planDate?: string, offset?: number) =>
+    ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all", planDate ?? "all", offset ?? 0] as const,
   run: (planRunId: string) => ["runs", "detail", planRunId] as const,
   adminConfig: () => ["admin-config"] as const,
   dcSelection: () => ["dc-selection"] as const,

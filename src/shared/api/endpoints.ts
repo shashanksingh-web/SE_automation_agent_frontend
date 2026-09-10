@@ -183,9 +183,15 @@ export const feedbackOpsApi = {
 // §14 Past PlanRuns (Run History).
 // ---------------------------------------------------------------------------
 export const runsApi = {
-  // limit defaults to 50, capped at 500 server-side.
-  list: (params?: { scope_type?: string; scope_value?: string; status?: string; limit?: number; offset?: number }) =>
-    apiGetPaginated<RunsListEntry>("/runs/", params),
+  // limit defaults to 50, capped at 500 server-side. plan_date added 2026-09-10.
+  list: (params?: {
+    scope_type?: string;
+    scope_value?: string;
+    status?: string;
+    plan_date?: string;
+    limit?: number;
+    offset?: number;
+  }) => apiGetPaginated<RunsListEntry>("/runs/", params),
 
   get: (planRunId: string) =>
     apiGet<PlanRunResponse>(`/runs/${encodeURIComponent(planRunId)}/`),

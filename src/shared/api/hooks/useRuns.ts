@@ -11,10 +11,16 @@ export function useRunsList(params?: {
   scope_type?: string;
   scope_value?: string;
   status?: string;
+  plan_date?: string;
+  limit?: number;
+  offset?: number;
 }) {
   return useQuery({
-    queryKey: queryKeys.runs(params?.scope_type, params?.scope_value, params?.status),
+    queryKey: queryKeys.runs(params?.scope_type, params?.scope_value, params?.status, params?.plan_date, params?.offset),
     queryFn: () => runsApi.list(params),
+    // Keeps the previous page's rows on screen while a filter/page change is in flight -
+    // this list is browsed interactively (System Plan Runs tab), not a one-shot fetch.
+    placeholderData: (previous) => previous,
   });
 }
 
