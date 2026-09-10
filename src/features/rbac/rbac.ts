@@ -57,6 +57,8 @@ export function resolveDefaultView(user: AuthenticatedUser): RoleResolution {
           // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
           // ADMIN role only.
           "admin",
+          // System Plan Runs (added 2026-09-10) - ADMIN role only, same as "admin" above.
+          "system-plan-runs",
           "zbm",
           "state",
           "district",

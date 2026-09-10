@@ -50,7 +50,12 @@ export type ViewType =
   | "node"
   // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
   // ADMIN role only (see resolveDefaultView in features/rbac/rbac.ts).
-  | "admin";
+  | "admin"
+  // System Plan Runs (added 2026-09-10, explicit user request - moved out of the Admin
+  // Control Panel's own tab bar into its own top-level nav item, "with Overall, ZBM/
+  // State Head, State, RBM, ABM") - every PlanRun network-wide, full filter set. ADMIN
+  // role only, same as "admin" above (see AllPlanRunsPanel).
+  | "system-plan-runs";
 
 export type DateSelection =
   | { type: "today" }

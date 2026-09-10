@@ -6,6 +6,7 @@ import { ZbmView } from "@/features/views/ZbmView";
 import { ScopeView } from "@/features/views/ScopeView";
 import { OpsView } from "@/features/views/OpsView";
 import { AdminView } from "@/features/views/AdminView";
+import { AllPlanRunsPanel } from "@/features/views/AllPlanRunsPanel";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
       { path: "se", element: <ScopeView title="SE" scopeType="SE" pathSegment="se" /> },
       { path: "ops", element: <OpsView /> },
       { path: "admin", element: <AdminView /> },
+      { path: "system-plan-runs", element: <AllPlanRunsPanel /> },
     ],
   },
 ]);

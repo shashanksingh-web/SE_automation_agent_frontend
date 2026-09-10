@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate } from "react-router-dom";
-import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings } from "lucide-react";
+import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings, ClipboardList } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useAppStore } from "@/shared/store/appStore";
 import { resolveDefaultView } from "@/features/rbac/rbac";
@@ -18,6 +18,7 @@ const NAV_ITEMS: Array<{ type: ViewType; label: string; icon: typeof LayoutDashb
   { type: "se", label: "SE", icon: User },
   { type: "ops", label: "Ops", icon: Shield },
   { type: "admin", label: "Admin", icon: Settings },
+  { type: "system-plan-runs", label: "System Plan Runs", icon: ClipboardList },
 ];
 
 // §18 component tree: Sidebar filtered by RBAC (§4), TopBar (per-view here, see
