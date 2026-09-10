@@ -36,6 +36,12 @@ export interface DroppedDC {
   reason: string;
 }
 
+// Google Maps route-accuracy overlay (added 2026-09-10, wired into this API 2026-09-10)
+// - applied only to the already-selected final route (BO-scored/model-chosen stops),
+// never to the candidate-pool search that picked them, so this never changes WHICH
+// stops are on the route, only how accurate total_distance_km/total_travel_minutes are.
+export type DistanceSource = "haversine_x1.4" | "google_maps";
+
 export interface RoutePlan {
   plan_type: RoutePlanType;
   is_default_selected: boolean;
@@ -50,6 +56,15 @@ export interface RoutePlan {
   // for the other two. See planning/routing.py: RoutePlan.objects.create(...).
   avg_speed_kmph_used: number | null;
   alpha_used: number | null;
+  // "haversine_x1.4" (default) means total_distance_km/total_travel_minutes are the
+  // cheap estimate - either Google Maps isn't configured or the live call failed this
+  // run (fail-open, same number this route would have carried before this feature
+  // existed). "google_maps" means they're a real Directions API result for this exact
+  // route. google_exceeds_cap only means something when distance_source is
+  // "google_maps": the real distance/time breaches the cap the Haversine estimate had
+  // satisfied - flagged, not re-decided (stop selection is never re-run against it).
+  distance_source: DistanceSource;
+  google_exceeds_cap: boolean;
   feasible: boolean;
   infeasibility_reason: string | null;
   origin_lat: number | null;

@@ -62,6 +62,21 @@ function parseSeRoutingExceptions(exceptions: Exception[], seEmail: string, plan
     });
 }
 
+// Origin_Point_Outlier_Overridden (planning/services.py, added 2026-09-04) - a
+// different exception source (attendance_attendance, not RoutingAgent) with its own
+// Detail format ("SE user_id={uid}: ..."), not the "{se_email} @ {date}" convention the
+// routing notes above rely on - se_id (the numeric employee code, not the email) is the
+// only thing that matches it, since Detail never carries the email at all. Fires once
+// per SE per run (not per plan_type), when the SE's single most-recent punch-in
+// disagreed with their last-30-day majority location and the majority won instead - see
+// se_daily_plan_agent.resolve_typical_origin.
+function findOriginOutlierNote(exceptions: Exception[], seId: string): string | null {
+  const hit = exceptions.find(
+    (e) => e.Reason_Code === "Origin_Point_Outlier_Overridden" && e.Detail.includes(`user_id=${seId}`),
+  );
+  return hit ? hit.Detail.replace(/^SE user_id=\d+:\s*/, "") : null;
+}
+
 // Plan A (Models 1-3) vs Plan B (Beat Planning / Cluster-Based Model, added 2026-08-31 -
 // see RoutingPlanSelector) - a PlanRun only ever has one family's 3 rows, so plan_type
 // alone tells you which family produced what's shown here (routePlanFamily).
@@ -115,6 +130,7 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
 
   const routingNotes = data?.se_name ? parseSeRoutingExceptions(exceptions, data.se_name, planDate) : [];
   const generalNotes = routingNotes.filter((n) => n.planType === null);
+  const originOutlierNote = data?.se_id ? findOriginOutlierNote(exceptions, data.se_id) : null;
 
   return (
     <Drawer open={!!se} onOpenChange={(open) => !open && onClose()}>
@@ -153,6 +169,12 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
           </div>
         )}
 
+        {originOutlierNote && (
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <span className="font-semibold uppercase tracking-wide">Origin overridden:</span> {originOutlierNote}
+          </div>
+        )}
+
         <div className="space-y-3 overflow-auto">
           {sortedPlans.map((plan) => (
             <Card
@@ -167,6 +189,23 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
                   {PLAN_LABELS[plan.plan_type]}
                   {plan.is_default_selected && <Badge>Selected</Badge>}
                   {!plan.feasible && <Badge variant="destructive">Infeasible</Badge>}
+                  {plan.distance_source === "google_maps" && (
+                    <Badge
+                      variant="secondary"
+                      title="Distance/time for this route come from a real Google Maps Directions API call, not the Haversine x 1.4 estimate."
+                    >
+                      Google Maps verified
+                    </Badge>
+                  )}
+                  {plan.google_exceeds_cap && (
+                    <Badge
+                      variant="warning"
+                      title="Real Google Maps road distance/time for this route exceeds the cap the Haversine estimate had satisfied. Stops were not re-selected against this - only flagged."
+                    >
+                      <AlertTriangle className="mr-1 h-3 w-3" />
+                      Exceeds cap on real roads
+                    </Badge>
+                  )}
                 </CardTitle>
                 <Button
                   size="sm"
