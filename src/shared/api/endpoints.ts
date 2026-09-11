@@ -1,5 +1,6 @@
 import { apiGet, apiGetPaginated, apiPost, apiPostForm, apiUrl } from "@/shared/api/client";
 import type { AdminConfigResponse } from "@/shared/types/adminConfig";
+import type { RoutingScopeOverride, RoutingOverrideScopeType } from "@/shared/types/routingOverrides";
 import type {
   DCSelectionState,
   DCSelectionRules,
@@ -280,4 +281,34 @@ export const dcSelectionApi = {
   // these download a sample file, they don't return JSON.
   sampleRankCsvUrl: () => apiUrl("/admin/dc-selection/sample-rank-csv/"),
   sampleSelectedDcsCsvUrl: () => apiUrl("/admin/dc-selection/sample-selected-dcs-csv/"),
+};
+
+// ---------------------------------------------------------------------------
+// Routing per-scope overrides (added 2026-09-11) - NODE/STATE-only, most-specific-wins
+// ceiling overrides layered on top of the Routing group's network-wide values.
+// ---------------------------------------------------------------------------
+export const routingOverridesApi = {
+  list: () => apiGet<RoutingScopeOverride[]>("/admin/routing-overrides/"),
+
+  // Any subset of the 4 ceiling fields; a field set to `null` clears that override
+  // (falls through to a less-specific scope/the global default), an omitted field is
+  // left untouched.
+  upsert: (
+    scopeType: RoutingOverrideScopeType,
+    scopeValue: string,
+    fields: Partial<Record<
+      "r1_2_max_travel_minutes" | "plan_a_max_round_trip_distance_km" | "plan_b_max_daily_distance_km" | "plan_b_max_daily_travel_minutes",
+      number | null
+    >>,
+    actor?: string,
+  ) =>
+    apiPost<RoutingScopeOverride>("/admin/routing-overrides/", {
+      scope_type: scopeType,
+      scope_value: scopeValue,
+      ...fields,
+      actor,
+    }),
+
+  remove: (scopeType: RoutingOverrideScopeType, scopeValue: string) =>
+    apiPost<{ deleted: boolean }>("/admin/routing-overrides/delete/", { scope_type: scopeType, scope_value: scopeValue }),
 };

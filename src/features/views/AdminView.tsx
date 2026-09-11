@@ -10,6 +10,7 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
 import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
+import { RoutingOverridesPanel } from "@/features/views/RoutingOverridesPanel";
 
 // "DC Selection" is also planning/admin_config.py's own group name for two unrelated
 // numeric thresholds (GR-28/90+-day-boost overdue minimums) - renamed here for the tab
@@ -197,6 +198,11 @@ export function AdminView() {
                 ))}
               </CardContent>
             </Card>
+            {group.Group === "Routing" && (
+              <div className="mt-4">
+                <RoutingOverridesPanel />
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>
