@@ -9,15 +9,18 @@ export interface AppStore {
   defaultView: { type: ViewType; scopeValue: string } | null;
 
   dateSelection: DateSelection;
-  // Which route-planning family (Plan A / Plan B) to generate - global like
+  // Which route-planning family (Plan A / Plan B / Plan C) to generate - global like
   // dateSelection since every scope GET regenerates the whole plan from scratch, so this
   // has to be threaded through every generation call, not just the Create/Refresh button
   // that first set it (else the next passive scope fetch would silently regenerate back
-  // to Plan A - see useScopePlanRun.ts).
+  // to Plan A - see useScopePlanRun.ts). Plan C (AI-Reasoned via an LLM, opened up to
+  // this UI 2026-09-11) makes a real LLM call per SE in scope - see RoutingPlanSelector's
+  // own warning copy before assuming this is as cheap/instant as A/B.
   routingPlan: RoutingPlanChoice;
   // Plan B's opt-in "Fixed Rotation" beat-zone restriction (?rotation=true) - kept
-  // alongside routingPlan since it's silently a no-op server-side under Plan A; the UI
-  // resets it to false whenever routingPlan flips back to "A" (see RoutingPlanSelector).
+  // alongside routingPlan since it's silently a no-op server-side under anything but
+  // Plan B; the UI resets it to false whenever routingPlan flips away from "B" (see
+  // RoutingPlanSelector).
   enableRotation: RotationChoice;
   scopeSelection: Partial<Record<ScopeType, string[]>>;
   activeView: ViewType | null;
@@ -53,12 +56,12 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setDateSelection: (dateSelection) => set({ dateSelection }),
 
-  // Flipping back to Plan A also clears enableRotation - it's a silent no-op under Plan A
-  // server-side, so leaving it "on" would just be a stale, misleading toggle state.
+  // Flipping away from Plan B also clears enableRotation - it's a silent no-op under
+  // Plan A/C server-side, so leaving it "on" would just be a stale, misleading toggle state.
   setRoutingPlan: (routingPlan) =>
     set((state) => ({
       routingPlan,
-      enableRotation: routingPlan === "A" ? false : state.enableRotation,
+      enableRotation: routingPlan === "B" ? state.enableRotation : false,
     })),
 
   setEnableRotation: (enableRotation) => set({ enableRotation }),
