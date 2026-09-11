@@ -45,7 +45,10 @@ export const directoryApi = {
   nodes: (params?: { state?: string }) =>
     apiGet<NodeOption[]>("/directory/nodes/", params),
 
-  districts: (params: { state: string }) =>
+  // state is optional server-side (planning.directory.list_districts) - omit it to get
+  // every District network-wide, e.g. for RoutingOverridesPanel's scope-value picker,
+  // which isn't nested under a state selection the way the ScopeSelector cascade is.
+  districts: (params?: { state?: string }) =>
     apiGet<DistrictOption[]>("/directory/districts/", params),
 
   blocks: (params: { state: string; district: string }) =>

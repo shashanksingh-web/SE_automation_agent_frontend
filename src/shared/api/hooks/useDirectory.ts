@@ -28,6 +28,17 @@ export function useDistricts(state: string | undefined) {
   });
 }
 
+// Every District network-wide, unscoped - for pickers that aren't nested under a State
+// selection (e.g. RoutingOverridesPanel's scope-value multiselect), unlike useDistricts
+// above which is the cascading State -> District dropdown flow.
+export function useAllDistricts() {
+  return useQuery({
+    queryKey: queryKeys.directory.districts(""),
+    queryFn: () => directoryApi.districts(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBlocks(state: string | undefined, district: string | undefined) {
   return useQuery({
     queryKey: queryKeys.directory.blocks(state ?? "", district ?? ""),

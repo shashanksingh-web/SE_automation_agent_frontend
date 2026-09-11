@@ -1,11 +1,11 @@
 // Per-scope Routing ceiling overrides (planning/models.py RoutingScopeOverride, added
 // 2026-09-11, explicit user request - "in routing parameter rule may be different for
-// node, district, state or overall"). Resolution precedence: NODE overrides STATE
-// overrides the global Admin Control Panel / hardcoded default (Routing group in
-// adminConfig.ts) - see se_daily_plan_agent.resolve_routing_ceilings. DISTRICT is
-// deliberately not a valid scope_type yet - see the model's own docstring for why
-// (no District field reaches the per-SE routing call site today).
-export type RoutingOverrideScopeType = "NODE" | "STATE";
+// node, district, state or overall"). Resolution precedence: NODE overrides DISTRICT
+// overrides STATE overrides the global Admin Control Panel / hardcoded default (Routing
+// group in adminConfig.ts) - see se_daily_plan_agent.resolve_routing_ceilings. DISTRICT
+// was added 2026-09-11 once Geo_Mapping_Normalized.json was confirmed to carry a dc_id
+// field the backend can join on.
+export type RoutingOverrideScopeType = "NODE" | "DISTRICT" | "STATE";
 
 export interface RoutingScopeOverride {
   Scope_Type: RoutingOverrideScopeType;
