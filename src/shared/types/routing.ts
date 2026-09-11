@@ -1,15 +1,24 @@
 // Plan A (existing 3 models) vs Plan B (Beat Planning / Cluster-Based Model, added
-// 2026-08-31 - planning/models.py RoutePlan.PlanType) - one PlanRun only ever generates
-// one family's 3 RoutePlan rows (planning/routing.py: generate_route_plans_for_se's
-// plan_choice branch), chosen via ?routing_plan=A|B at plan-generation time (see
-// scopeApi.get/normalizationApi.tuff), not at routes-list time.
+// 2026-08-31) vs Plan C (AI-Reasoned via an LLM, added 2026-09-11 -
+// planning/models.py RoutePlan.PlanType) - one PlanRun only ever generates one family's
+// rows (planning/routing.py: generate_route_plans_for_se's plan_choice branch), chosen
+// via ?routing_plan=A|B at plan-generation time (see scopeApi.get/normalizationApi.tuff),
+// not at routes-list time. Plan C is deliberately ONE row, not 3 (R5.1's "minimum 3"
+// doesn't apply to a single-model LLM mode) - and isn't triggerable from this app yet:
+// the HTTP API's own ?routing_plan= validation (planning/views.py
+// _routing_plan_choice_from_get) still only accepts A/B, so a Plan C row only exists
+// today if it was generated via the interactive CLI (generate_se_plan.py/
+// activate_tuff.py --routing-plan C). LLM_REASONED is included here purely so the Plan
+// Drawer can correctly display one if it shows up, not to imply it can be requested
+// from this UI.
 export type RoutePlanType =
   | "PRIORITY_MAX"
   | "DISTANCE_MIN"
   | "BALANCED"
   | "CLUSTER_BASED"
   | "CLUSTER_SCOREMAX"
-  | "CLUSTER_DISTMIN";
+  | "CLUSTER_DISTMIN"
+  | "LLM_REASONED";
 
 export const CLUSTER_PLAN_TYPES: RoutePlanType[] = [
   "CLUSTER_BASED",
@@ -17,7 +26,8 @@ export const CLUSTER_PLAN_TYPES: RoutePlanType[] = [
   "CLUSTER_DISTMIN",
 ];
 
-export function routePlanFamily(planType: RoutePlanType): "A" | "B" {
+export function routePlanFamily(planType: RoutePlanType): "A" | "B" | "C" {
+  if (planType === "LLM_REASONED") return "C";
   return CLUSTER_PLAN_TYPES.includes(planType) ? "B" : "A";
 }
 
@@ -65,6 +75,11 @@ export interface RoutePlan {
   // satisfied - flagged, not re-decided (stop selection is never re-run against it).
   distance_source: DistanceSource;
   google_exceeds_cap: boolean;
+  // Plan C only (planning/models.py RoutePlan.llm_reasoning) - the LLM's own
+  // explanation for these stops/order, plus any system notes (a hallucinated DC_ID
+  // dropped, a cap-breach trim) appended by build_route_llm_reasoned. null for every
+  // Plan A/B row and whenever the model returned no explanation.
+  llm_reasoning: string | null;
   feasible: boolean;
   infeasibility_reason: string | null;
   origin_lat: number | null;
@@ -103,4 +118,5 @@ export const ROUTE_PLAN_TYPES: RoutePlanType[] = [
   "CLUSTER_BASED",
   "CLUSTER_SCOREMAX",
   "CLUSTER_DISTMIN",
+  "LLM_REASONED",
 ];

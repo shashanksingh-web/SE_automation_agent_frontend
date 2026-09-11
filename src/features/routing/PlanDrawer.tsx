@@ -77,9 +77,10 @@ function findOriginOutlierNote(exceptions: Exception[], seId: string): string | 
   return hit ? hit.Detail.replace(/^SE user_id=\d+:\s*/, "") : null;
 }
 
-// Plan A (Models 1-3) vs Plan B (Beat Planning / Cluster-Based Model, added 2026-08-31 -
-// see RoutingPlanSelector) - a PlanRun only ever has one family's 3 rows, so plan_type
-// alone tells you which family produced what's shown here (routePlanFamily).
+// Plan A (Models 1-3) vs Plan B (Beat Planning / Cluster-Based Model, added 2026-08-31)
+// vs Plan C (AI-Reasoned via an LLM, added 2026-09-11 - see RoutingPlanSelector for why
+// there's no "Plan C" button there yet) - a PlanRun only ever has one family's rows, so
+// plan_type alone tells you which family produced what's shown here (routePlanFamily).
 const PLAN_LABELS: Record<RoutePlan["plan_type"], string> = {
   PRIORITY_MAX: "Priority-Max",
   DISTANCE_MIN: "Distance-Min",
@@ -87,6 +88,7 @@ const PLAN_LABELS: Record<RoutePlan["plan_type"], string> = {
   CLUSTER_BASED: "Cluster Efficiency-Balanced",
   CLUSTER_SCOREMAX: "Cluster Score-Maximizing",
   CLUSTER_DISTMIN: "Cluster Distance-Minimizing",
+  LLM_REASONED: "AI-Reasoned",
 };
 
 // §10 - one card per plan, feasible first, is_default_selected pre-highlighted.
@@ -219,6 +221,12 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
               <CardContent className="space-y-3">
                 {!plan.feasible && plan.infeasibility_reason && (
                   <p className="text-xs text-destructive">{plan.infeasibility_reason}</p>
+                )}
+                {plan.llm_reasoning && (
+                  <div className="rounded-md border bg-accent/40 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide">AI reasoning:</span>{" "}
+                    {plan.llm_reasoning}
+                  </div>
                 )}
                 {routingNotes
                   .filter((n) => n.planType === plan.plan_type)
