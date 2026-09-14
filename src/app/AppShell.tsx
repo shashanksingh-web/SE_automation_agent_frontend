@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, Navigate } from "react-router-dom";
-import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings, ClipboardList, Loader2 } from "lucide-react";
+import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
+import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings, ClipboardList, Loader2, Menu, X } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useAppStore } from "@/shared/store/appStore";
 import { resolveDefaultView } from "@/features/rbac/rbac";
@@ -33,6 +33,18 @@ export function AppShell() {
   const setDefaultView = useAppStore((s) => s.setDefaultView);
   const reset = useAppStore((s) => s.reset);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Mobile nav (added 2026-09-14, explicit user request - responsive SE/ABM screens):
+  // below md:, the sidebar is off-canvas by default (a field SE/ABM's phone has no
+  // room for a permanently-visible 224px rail) - this only tracks whether it's pulled
+  // into view, it doesn't change anything about the desktop layout at md: and up.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
+
+  // Close the mobile drawer on every navigation - without this, tapping a nav link
+  // would leave the overlay open on top of the page it just navigated to.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   // AuthProvider restores `user` from a real session (GET /auth/me/) on a hard reload,
   // but the Zustand store (role/allowedViewTypes/scope+date selection) is in-memory
@@ -60,53 +72,103 @@ export function AppShell() {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  return (
-    <div className="flex h-screen overflow-hidden">
-      <aside className="flex w-56 flex-col overflow-y-auto border-r bg-muted/20">
-        <div className="border-b px-4 py-4">
+  const sidebarContent = (
+    <>
+      <div className="flex items-center justify-between border-b px-4 py-4">
+        <div>
           <div className="text-sm font-semibold">SE Daily Planning</div>
           <div className="text-xs text-muted-foreground">{user.name} ({user.role})</div>
         </div>
-        <nav className="flex-1 space-y-0.5 p-2">
-          {NAV_ITEMS.filter((item) => allowedViewTypes.includes(item.type)).map((item) => (
-            <NavLink
-              key={item.type}
-              to={`/${item.type}`}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  isActive && "bg-accent text-accent-foreground",
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="space-y-1 border-t p-2">
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setHistoryOpen(true)}>
-            <History className="h-4 w-4" />
-            Run history
-          </Button>
-          <ChangePasswordPopover />
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-2"
-            onClick={() => {
-              logout();
-              reset();
-            }}
+        {/* Close affordance only ever visible in the mobile off-canvas drawer - the
+            md:+ static sidebar has no reason to be dismissible. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        {NAV_ITEMS.filter((item) => allowedViewTypes.includes(item.type)).map((item) => (
+          <NavLink
+            key={item.type}
+            to={`/${item.type}`}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                isActive && "bg-accent text-accent-foreground",
+              )
+            }
           >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
-        </div>
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="space-y-1 border-t p-2">
+        <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setHistoryOpen(true)}>
+          <History className="h-4 w-4" />
+          Run history
+        </Button>
+        <ChangePasswordPopover />
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2"
+          onClick={() => {
+            logout();
+            reset();
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* Desktop/tablet: the sidebar is always in flow, exactly as before. */}
+      <aside className="hidden w-56 flex-col overflow-y-auto border-r bg-muted/20 md:flex">
+        {sidebarContent}
       </aside>
 
-      <main className="flex-1 overflow-auto p-6">
-        <Outlet />
-      </main>
+      {/* Mobile: off-canvas drawer + backdrop, only mounted below md:. A field SE/ABM's
+          phone has no room for a permanent 224px rail, so the sidebar starts hidden and
+          slides in over the page instead of squeezing it - same content either way, no
+          separate mobile nav data/logic to keep in sync with the desktop one. */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-64 max-w-[80vw] flex-col overflow-y-auto border-r bg-background transition-transform duration-200 md:hidden",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        {sidebarContent}
+      </aside>
+
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile-only top bar - the sole way to reopen the drawer once it's closed,
+            since below md: there's no other persistent chrome on screen. */}
+        <div className="flex items-center gap-2 border-b bg-muted/20 px-3 py-2 md:hidden">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMobileNavOpen(true)}>
+            <Menu className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold">SE Daily Planning</span>
+        </div>
+
+        <main className="flex-1 overflow-auto p-3 md:p-6">
+          <Outlet />
+        </main>
+      </div>
 
       <RunsHistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
