@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Plus, KeyRound } from "lucide-react";
 import { useUsers, useCreateUser, useSetUserActive, useResetUserPassword } from "@/shared/api/hooks/useUsers";
+import { useSEs, useAbms, useRbms, useZbms } from "@/shared/api/hooks/useDirectory";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -9,13 +10,26 @@ import { Badge } from "@/shared/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/shared/components/ui/table";
+import { SingleSelectCombobox, type SingleSelectOption } from "@/shared/components/SingleSelectCombobox";
 import type { AppRole } from "@/features/rbac/types";
 import type { UserRow } from "@/shared/types/users";
+import type { ManagerDirectoryEntry } from "@/shared/types/directory";
 import { ApiError } from "@/shared/api/client";
 
 const ROLES: AppRole[] = ["SE", "ABM", "RBM", "ZBM", "NATIONAL", "ADMIN"];
 
+// Roles with a real, directory-backed Employee ID to pick from (added 2026-09-14,
+// explicit user request - "Username will be Employee ID (dropdown) Name automatically
+// fetch"). NATIONAL/ADMIN have no org-hierarchy row anywhere in this data model (see
+// planning/directory.py) - free-text Username/Name stays the only option for those two,
+// not an oversight.
+const DIRECTORY_BACKED_ROLES: AppRole[] = ["SE", "ABM", "RBM", "ZBM"];
+
 const EMPTY_FORM = { username: "", password: "", name: "", role: "SE" as AppRole, email: "", employee_code: "" };
+
+function managerOptions(entries: ManagerDirectoryEntry[] | undefined): SingleSelectOption[] {
+  return (entries ?? []).map((e) => ({ value: e.code, label: e.code, sublabel: e.name ?? "no name on file" }));
+}
 
 // Admin Panel "Users" tab (added 2026-09-14, explicit user request - "in admin panel
 // provide user creation and password creation active and deactivate the user and
@@ -29,6 +43,67 @@ export function UsersPanel() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Directory sources for the Employee ID pickers below - only fetched for the role
+  // that's actually selected would be nicer, but these 4 lists are all small/cheap
+  // (React Query dedupes/caches regardless of which tab-switch triggered them first).
+  const { data: ses, isLoading: sesLoading } = useSEs();
+  const { data: abms, isLoading: abmsLoading } = useAbms();
+  const { data: rbms, isLoading: rbmsLoading } = useRbms();
+  const { data: zbms, isLoading: zbmsLoading } = useZbms();
+
+  // SEs have a real Employee ID (emp_id_se) but - unlike ABM/RBM/ZBM - no name field
+  // exists anywhere in this data model (see SEDirectoryEntry's own note), so only the
+  // ID+email half of "pick ID -> auto-fill Name" is possible for this role. Filtered to
+  // entries that actually have one - an SE with none on file (confirmed live: ~18% of
+  // them) genuinely can't be assigned a username this way.
+  const seOptions = useMemo<SingleSelectOption[]>(
+    () =>
+      (ses ?? [])
+        .filter((s) => s.emp_id_se)
+        .map((s) => ({ value: s.emp_id_se!, label: s.emp_id_se!, sublabel: s.se_email })),
+    [ses],
+  );
+  const seEmailByEmpId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of ses ?? []) if (s.emp_id_se) map.set(s.emp_id_se, s.se_email);
+    return map;
+  }, [ses]);
+  const abmOptions = useMemo(() => managerOptions(abms), [abms]);
+  const rbmOptions = useMemo(() => managerOptions(rbms), [rbms]);
+  const zbmOptions = useMemo(() => managerOptions(zbms), [zbms]);
+  const nameByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of [...(abms ?? []), ...(rbms ?? []), ...(zbms ?? [])]) if (e.name) map.set(e.code, e.name);
+    return map;
+  }, [abms, rbms, zbms]);
+
+  const { employeeOptions, employeeOptionsLoading } =
+    form.role === "SE"
+      ? { employeeOptions: seOptions, employeeOptionsLoading: sesLoading }
+      : form.role === "ABM"
+        ? { employeeOptions: abmOptions, employeeOptionsLoading: abmsLoading }
+        : form.role === "RBM"
+          ? { employeeOptions: rbmOptions, employeeOptionsLoading: rbmsLoading }
+          : { employeeOptions: zbmOptions, employeeOptionsLoading: zbmsLoading };
+
+  // Switching Role mid-edit invalidates whatever Employee ID was already picked (it
+  // belongs to the PREVIOUS role's own list) - reset the derived fields rather than
+  // leaving a stale username/name/email/employee_code combination from a different role.
+  const handleRoleChange = (role: AppRole) => {
+    setForm((f) => ({ ...f, role, username: "", name: "", email: "", employee_code: "" }));
+  };
+
+  // Picking an Employee ID auto-fills Username (= the ID itself) and, where the data
+  // supports it, Name/Email/Employee code - see this component's own note on why SE
+  // never gets a Name here (no name field exists for SE anywhere in this data model).
+  const handlePickEmployeeId = (id: string) => {
+    if (form.role === "SE") {
+      setForm((f) => ({ ...f, username: id, email: seEmailByEmpId.get(id) ?? f.email }));
+    } else {
+      setForm((f) => ({ ...f, username: id, name: nameByCode.get(id) ?? "", employee_code: id }));
+    }
+  };
+
   const handleCreate = () => {
     setCreateError(null);
     createUser.mutate(
@@ -41,6 +116,7 @@ export function UsersPanel() {
   };
 
   const canCreate = form.username.trim() && form.password.trim();
+  const isDirectoryBacked = DIRECTORY_BACKED_ROLES.includes(form.role);
 
   return (
     <Card>
@@ -54,33 +130,8 @@ export function UsersPanel() {
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
           <div className="space-y-1">
-            <Label className="text-xs">Username</Label>
-            <Input
-              className="w-36"
-              value={form.username}
-              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Password</Label>
-            <Input
-              type="password"
-              className="w-36"
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Name</Label>
-            <Input
-              className="w-36"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
             <Label className="text-xs">Role</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as AppRole }))}>
+            <Select value={form.role} onValueChange={(v) => handleRoleChange(v as AppRole)}>
               <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
@@ -93,6 +144,46 @@ export function UsersPanel() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Username{isDirectoryBacked && " (Employee ID)"}</Label>
+            {isDirectoryBacked ? (
+              <SingleSelectCombobox
+                className="w-48"
+                options={employeeOptions}
+                value={form.username}
+                onChange={handlePickEmployeeId}
+                loading={employeeOptionsLoading}
+                placeholder="Select employee ID..."
+              />
+            ) : (
+              <Input
+                className="w-36"
+                value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              />
+            )}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Password</Label>
+            <Input
+              type="password"
+              className="w-36"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">
+              Name{form.role !== "SE" && isDirectoryBacked ? " (auto-filled)" : ""}
+            </Label>
+            <Input
+              className="w-36"
+              value={form.name}
+              disabled={form.role !== "SE" && isDirectoryBacked}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder={form.role === "SE" ? "No name on file - enter manually" : undefined}
+            />
+          </div>
           {form.role === "SE" && (
             <div className="space-y-1">
               <Label className="text-xs">Email (scope value)</Label>
@@ -101,16 +192,6 @@ export function UsersPanel() {
                 className="w-44"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-          )}
-          {(form.role === "ABM" || form.role === "RBM" || form.role === "ZBM") && (
-            <div className="space-y-1">
-              <Label className="text-xs">Employee code (scope value)</Label>
-              <Input
-                className="w-36"
-                value={form.employee_code}
-                onChange={(e) => setForm((f) => ({ ...f, employee_code: e.target.value }))}
               />
             </div>
           )}

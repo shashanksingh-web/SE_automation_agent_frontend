@@ -42,9 +42,14 @@ export interface ManagerDirectoryEntry {
 }
 
 // No SE_Name/display-name field exists anywhere in this data model - se_email is the
-// only identifier. Don't assume a name is available for SEs.
+// only identifier with a name. emp_id_se (added 2026-09-14) is a real employee code
+// joined in from Geo_Mapping_Normalized.json by email - null (not fabricated) for the
+// ~18% of SEs with no matching Geo_Mapping row (confirmed live: 373/453 have one).
+// There is still no name to auto-fill for an SE even once emp_id_se is picked - don't
+// assume one exists just because the code does.
 export interface SEDirectoryEntry {
   se_email: string;
+  emp_id_se: string | null;
   states: string[];
   nodes: string[];
   dc_count: number;
