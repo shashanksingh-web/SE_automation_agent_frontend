@@ -4,23 +4,30 @@
 // /api/planning/admin/config/ share this exact response shape (POST returns the same
 // state after applying changes, plus Errors).
 
-export interface AdminConfigField {
+interface AdminConfigFieldBase {
   group: string;
   key: string;
-  type: "int" | "float";
   label: string;
   unit: string;
-  min: number;
-  max: number;
   description: string;
   // "constants" (a BusinessConstants attribute, the majority of fields) or "module" (a
-  // bare se_daily_plan_agent module-level constant - currently only the Step 11 Routing
-  // group, added 2026-09-07 "routing agent ceiling also configurable"). Both are
-  // editable the same way from this frontend's perspective (same PATCH shape, same
-  // validation) - the distinction only matters backend-side (planning.admin_config's own
-  // docstring covers why "module" fields need a different apply mechanism), surfaced
+  // bare se_daily_plan_agent module-level constant - currently the Step 11 Routing group
+  // and Plan C's decision-style/cluster-definition group, added 2026-09-07/2026-09-12).
+  // Both are editable the same way from this frontend's perspective (same PATCH shape,
+  // same validation) - the distinction only matters backend-side (planning.admin_config's
+  // own docstring covers why "module" fields need a different apply mechanism), surfaced
   // here mostly for debugging/completeness, not branched on in the UI.
   target?: "constants" | "module";
+  // True when `value` differs from `default` because an admin override exists -
+  // distinct from a locally-edited-but-not-yet-saved value, which the panel tracks
+  // itself (see AdminView's pendingEdits state).
+  overridden: boolean;
+}
+
+export interface NumericAdminConfigField extends AdminConfigFieldBase {
+  type: "int" | "float";
+  min: number;
+  max: number;
   // Hardcoded default - never changes without a code deploy. For "constants" fields,
   // read fresh off a new BusinessConstants() every request; for "module" fields, this is
   // the one place the true original default is recorded at all (the module itself may
@@ -29,11 +36,19 @@ export interface AdminConfigField {
   // Effective value used by the next plan generation: the override if one exists,
   // else `default`. This is what the panel should show in the input.
   value: number;
-  // True when `value` differs from `default` because an admin override exists -
-  // distinct from a locally-edited-but-not-yet-saved value, which the panel tracks
-  // itself (see AdminView's pendingEdits state).
-  overridden: boolean;
 }
+
+// "choice" (added 2026-09-12, Plan C's decision-style field - the first non-numeric
+// ADMIN_EDITABLE_FIELDS entry, planning/admin_config.py apply_overrides' own "choice"
+// branch) - value/default are one of `choices`, not a number; min/max don't apply.
+export interface ChoiceAdminConfigField extends AdminConfigFieldBase {
+  type: "choice";
+  choices: string[];
+  default: string;
+  value: string;
+}
+
+export type AdminConfigField = NumericAdminConfigField | ChoiceAdminConfigField;
 
 export interface AdminConfigGroup {
   Group: string;

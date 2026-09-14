@@ -35,6 +35,47 @@ export interface RecommendedProducts {
   Recommended_Products: RecommendedProductItem[];
 }
 
+// AI-Generated Pitch (planning.ai_sales_forecast.build_ai_pitch, added 2026-09-12) -
+// the AI call's non-script output. When present, Script_Hindi above came from this same
+// call (Data_Sources_Used includes "AI-Generated Script"); the templated script is the
+// fallback used whenever this is null (no LLM provider configured, nothing real to
+// build a pitch from, every provider failed, or the response had no usable script).
+export interface AiSalesForecastProduct {
+  Name: string | null;
+  // Why the AI picked this one from the real candidate pool (Recommended_Products
+  // above) - not a new product source, just the AI's own subset + reasoning over it.
+  Reason: string | null;
+}
+
+export interface AiSalesForecastScheme {
+  Name: string | null;
+  Category: string | null;
+  Brand: string | null;
+  Valid_Until: string | null;
+}
+
+export interface AiSalesForecast {
+  // How many days ahead this pitch is framed for (Admin Control Panel: Pitching (AI
+  // Sales Forecast) > Forecast window, 15-20, default 18).
+  Window_Days: number | null;
+  // Up to 5, a curated subset of Recommended_Products the AI chose to feature - not a
+  // separate product source, and never a hallucinated name (every name is verified
+  // against Recommended_Products server-side before being kept here).
+  Products: AiSalesForecastProduct[];
+  // 1-sentence English summary of the AI's own approach - not shown to the DC, this is
+  // for the SE/ops reading the panel to understand why this script says what it says.
+  Reasoning: string | null;
+  // This DC's DC Club (loyalty-tier) standing, in plain English - the same data the
+  // template pitch's own "Club" talking point renders, just given to the AI as context.
+  Club_Context: string | null;
+  // This DC's currently-active Sales/ABS Schemes - a genuinely separate system from DC
+  // Club above, given to the AI as context (never as a product source in its own right).
+  Scheme_Context: AiSalesForecastScheme[];
+  // Anything the AI proposed that got dropped (a hallucinated product name, a
+  // duplicate, more than 5 products) - empty when nothing was dropped.
+  Notes: string[];
+}
+
 // pitch_script() (views.py) - 404 body is the generic {error} shape, this is the 200 shape.
 export interface PitchResponse extends RecommendedProducts {
   DailyTask_ID: number;
@@ -44,6 +85,7 @@ export interface PitchResponse extends RecommendedProducts {
   Script_Hindi: string;
   Data_Sources_Used: string[];
   Data_Sources_Skipped: string[];
+  AI_Sales_Forecast: AiSalesForecast | null;
   Generated_At: string;
 }
 

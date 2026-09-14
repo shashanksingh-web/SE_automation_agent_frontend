@@ -8,6 +8,7 @@ import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Badge } from "@/shared/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shared/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
 import { RoutingOverridesPanel } from "@/features/views/RoutingOverridesPanel";
@@ -35,12 +36,24 @@ export function AdminView() {
   const { user } = useAuth();
   const { data, isLoading, isError } = useAdminConfig();
   const updateConfig = useUpdateAdminConfig();
-  const [pendingEdits, setPendingEdits] = useState<Record<string, number>>({});
+  const [pendingEdits, setPendingEdits] = useState<Record<string, number | string>>({});
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
 
   const pendingCount = Object.keys(pendingEdits).length;
 
   const setEdit = (field: AdminConfigField, raw: string) => {
+    // "choice" fields (added 2026-09-12, Plan C's decision style) store the raw string
+    // as-is - no parseInt/parseFloat, and "" isn't a valid choice to fall through to
+    // "clear the edit" the way it is for a numeric field's empty input.
+    if (field.type === "choice") {
+      setPendingEdits((prev) => {
+        const next = { ...prev };
+        if (raw === field.value) delete next[field.key];
+        else next[field.key] = raw;
+        return next;
+      });
+      return;
+    }
     const parsed = field.type === "int" ? parseInt(raw, 10) : parseFloat(raw);
     setPendingEdits((prev) => {
       const next = { ...prev };
@@ -110,7 +123,7 @@ export function AdminView() {
     if (!group) return null;
     const weightFields = group.Fields.filter((f) => f.key.startsWith("health_weight_"));
     if (weightFields.length === 0) return null;
-    return weightFields.reduce((sum, f) => sum + (pendingEdits[f.key] ?? f.value), 0);
+    return weightFields.reduce((sum, f) => sum + Number(pendingEdits[f.key] ?? f.value), 0);
   }, [data, pendingEdits]);
 
   if (isLoading) {
@@ -226,7 +239,7 @@ function FieldEditor({
   busy,
 }: {
   field: AdminConfigField;
-  pendingValue: number | undefined;
+  pendingValue: number | string | undefined;
   error: string | undefined;
   onChange: (raw: string) => void;
   onReset: () => void;
@@ -251,16 +264,31 @@ function FieldEditor({
         )}
       </Label>
       <div className="flex items-center gap-1.5">
-        <Input
-          id={field.key}
-          type="number"
-          step={field.type === "float" ? "any" : 1}
-          min={field.min}
-          max={field.max}
-          value={displayValue}
-          onChange={(e) => onChange(e.target.value)}
-          className={error ? "border-destructive" : undefined}
-        />
+        {field.type === "choice" ? (
+          <Select value={String(displayValue)} onValueChange={onChange}>
+            <SelectTrigger id={field.key} className={error ? "border-destructive" : undefined}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {field.choices.map((choice) => (
+                <SelectItem key={choice} value={choice}>
+                  {choice}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            id={field.key}
+            type="number"
+            step={field.type === "float" ? "any" : 1}
+            min={field.min}
+            max={field.max}
+            value={displayValue}
+            onChange={(e) => onChange(e.target.value)}
+            className={error ? "border-destructive" : undefined}
+          />
+        )}
         {field.unit && <span className="shrink-0 text-xs text-muted-foreground">{field.unit}</span>}
         {(field.overridden || isDirty) && (
           <Button

@@ -22,7 +22,7 @@ export function useUpdateAdminConfig() {
       reset,
       actor,
     }: {
-      changes: Record<string, number>;
+      changes: Record<string, number | string>;
       reset?: string[];
       actor?: string;
     }) => adminApi.updateConfig(changes, reset, actor),

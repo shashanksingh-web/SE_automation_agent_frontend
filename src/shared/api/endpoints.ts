@@ -220,8 +220,9 @@ export const adminApi = {
 
   // `changes` - {field_key: new_value}; `reset` - field_keys to revert to their
   // hardcoded default. Either can be empty/omitted; both are applied in one request
-  // (reset first, then changes, per planning/views.py's admin_pipeline_config).
-  updateConfig: (changes: Record<string, number>, reset: string[] = [], actor?: string) =>
+  // (reset first, then changes, per planning/views.py's admin_pipeline_config). value is
+  // a string for a "choice" field (e.g. Plan C's decision style), a number otherwise.
+  updateConfig: (changes: Record<string, number | string>, reset: string[] = [], actor?: string) =>
     apiPost<AdminConfigResponse>("/admin/config/", { changes, reset, actor }),
 };
 

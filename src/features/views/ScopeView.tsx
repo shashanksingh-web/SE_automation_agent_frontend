@@ -38,7 +38,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
     null,
   );
 
-  const { merged, perScope, isLoading, isError } = useMultiScopePlanRuns(
+  const { merged, perScope, isLoading, isError, errors } = useMultiScopePlanRuns(
     pathSegment,
     scopeValues,
     dateSelection,
@@ -81,7 +81,11 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
 
       {isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Failed to load one or more scopes. Retryable - try Create/Refresh again.
+          {/* A PlanningError (422 - e.g. the Admin Panel's Scheduling weekly-off-day
+              gate, added 2026-09-13) carries a precise, human-readable reason - show it
+              verbatim rather than a generic "failed" message an admin would just retry
+              pointlessly against an intentional policy block, not a transient error. */}
+          {errors[0]?.message || "Failed to load one or more scopes. Retryable - try Create/Refresh again."}
         </div>
       )}
 
