@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAppStore } from "@/shared/store/appStore";
 import { useAuth } from "@/features/auth/AuthContext";
 import { isScopeValueLockedToSelf, ownScopeValue } from "@/features/rbac/rbac";
@@ -48,6 +48,19 @@ export function ScopeSelector({ scopeType }: ScopeSelectorProps) {
   const rbmsQuery = useRbms();
   const abmsQuery = useAbms();
   const zbmsQuery = useZbms();
+
+  // A locked-to-self role (SE/ABM/RBM) never gets a picker to select themselves with
+  // (see the read-only Badge returned below) - without this, scopeSelection[scopeType]
+  // stays permanently empty and ScopeView never has anything to fetch a plan for. Only
+  // ADMIN/NATIONAL logins had exercised this view before now, and neither role is
+  // locked-to-self, so this had no way to surface until a real SE/ABM/RBM account did.
+  useEffect(() => {
+    if (!user || !isScopeValueLockedToSelf(user.role) || scopeType !== user.role) return;
+    const own = ownScopeValue(user);
+    if (own && (selection.length !== 1 || selection[0] !== own)) {
+      setScopeSelection(scopeType, [own]);
+    }
+  }, [user, scopeType, selection, setScopeSelection]);
 
   if (user && isScopeValueLockedToSelf(user.role) && scopeType === user.role) {
     return (
