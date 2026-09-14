@@ -12,12 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
 import { RoutingOverridesPanel } from "@/features/views/RoutingOverridesPanel";
+import { UsersPanel } from "@/features/views/UsersPanel";
 
 // "DC Selection" is also planning/admin_config.py's own group name for two unrelated
 // numeric thresholds (GR-28/90+-day-boost overdue minimums) - renamed here for the tab
 // label only (not the underlying group key used for lookups/edits) so it doesn't read
 // as the same thing as the Program DC List tab below.
 const PROGRAM_DC_LIST_TAB = "program-dc-list";
+// Users (added 2026-09-14) - a real, backend-enforced tab (planning/auth_views.py's
+// require_admin), unlike every BusinessConstants group tab below it, which still has
+// no server-side permission check at all (see this session's own scoping note).
+const USERS_TAB = "users";
 const tabLabel = (group: string) => (group === "DC Selection" ? "DC Selection Thresholds" : group);
 
 // Admin Control Panel (added 2026-09-07, explicit user request - "add the new tab for
@@ -168,6 +173,7 @@ export function AdminView() {
       <Tabs defaultValue={PROGRAM_DC_LIST_TAB}>
         <TabsList className="flex h-auto flex-wrap justify-start gap-1 p-1">
           <TabsTrigger value={PROGRAM_DC_LIST_TAB}>Program DC List</TabsTrigger>
+          <TabsTrigger value={USERS_TAB}>Users</TabsTrigger>
           {data.Groups.map((group) => (
             <TabsTrigger key={group.Group} value={group.Group}>
               {tabLabel(group.Group)}
@@ -181,6 +187,10 @@ export function AdminView() {
             switched tabs mid-edit without saving or discarding first. */}
         <TabsContent value={PROGRAM_DC_LIST_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
           <DCSelectionPanel />
+        </TabsContent>
+
+        <TabsContent value={USERS_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
+          <UsersPanel />
         </TabsContent>
 
         {data.Groups.map((group) => (

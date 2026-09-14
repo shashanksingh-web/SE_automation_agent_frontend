@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate } from "react-router-dom";
-import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Map, Building2, Users, UserRound, User, Shield, History, LogOut, Settings, ClipboardList, Loader2 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useAppStore } from "@/shared/store/appStore";
 import { resolveDefaultView } from "@/features/rbac/rbac";
 import { Button } from "@/shared/components/ui/button";
 import { RunsHistoryPanel } from "@/features/runsHistory/RunsHistoryPanel";
+import { ChangePasswordPopover } from "@/features/auth/ChangePasswordPopover";
 import { cn } from "@/shared/lib/cn";
 import type { ViewType } from "@/shared/types/scope";
 
@@ -25,7 +26,7 @@ const NAV_ITEMS: Array<{ type: ViewType; label: string; icon: typeof LayoutDashb
 // ScopeView/ZbmView/OverallView/OpsView), MainContent via <Outlet/>, plus the
 // global RunsHistoryPanel overlay.
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, isInitializing, logout } = useAuth();
   const role = useAppStore((s) => s.role);
   const allowedViewTypes = useAppStore((s) => s.allowedViewTypes);
   const setRole = useAppStore((s) => s.setRole);
@@ -33,11 +34,11 @@ export function AppShell() {
   const reset = useAppStore((s) => s.reset);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // AuthProvider restores `user` from sessionStorage on a hard reload, but the
-  // Zustand store (role/allowedViewTypes/scope+date selection) is in-memory only
-  // and resets to empty - without this, a refreshed page shows an authenticated
-  // user with a sidebar that has filtered every nav item away. Re-derive RBAC
-  // state from the restored user whenever it's out of sync, not just on login.
+  // AuthProvider restores `user` from a real session (GET /auth/me/) on a hard reload,
+  // but the Zustand store (role/allowedViewTypes/scope+date selection) is in-memory
+  // only and resets to empty - without this, a refreshed page shows an authenticated
+  // user with a sidebar that has filtered every nav item away. Re-derive RBAC state
+  // from the restored user whenever it's out of sync, not just on login.
   useEffect(() => {
     if (user && role !== user.role) {
       const { defaultView, allowedViewTypes } = resolveDefaultView(user);
@@ -45,6 +46,17 @@ export function AppShell() {
       setDefaultView(defaultView);
     }
   }, [user, role, setRole, setDefaultView]);
+
+  // Wait for the initial session check before deciding to bounce to /login - without
+  // this, a genuinely logged-in user briefly flashes the login page on every hard
+  // refresh while GET /auth/me/ is still in flight.
+  if (isInitializing) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+      </div>
+    );
+  }
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -77,6 +89,7 @@ export function AppShell() {
             <History className="h-4 w-4" />
             Run history
           </Button>
+          <ChangePasswordPopover />
           <Button
             variant="ghost"
             className="w-full justify-start gap-2"

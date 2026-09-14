@@ -43,11 +43,17 @@ function buildUrl(path: string, params?: QueryParams): string {
 }
 
 // Every endpoint was GET-only, JSON, no auth (spec §1) until the Admin Control Panel
-// (added 2026-09-07) - its one write path (POST /admin/config/) is unauthenticated same
-// as everything else here (see PipelineSettings.updated_by's own backend docstring for
-// why), just no longer read-only. This wrapper is intentionally thin: no auth headers,
-// no retry-on-401 - none of that applies to this backend contract. App-shell login (§4)
-// is a separate concern layered on top, not part of this client.
+// (added 2026-09-07) - most write paths there are still unauthenticated same as
+// everything else here (see PipelineSettings.updated_by's own backend docstring for
+// why), just no longer read-only. Real session auth (added 2026-09-14 - see
+// features/auth/AuthContext.tsx) layers on top of this same thin client rather than
+// replacing it: no auth header to attach (Django session cookies ride along with
+// `credentials: "include"` below automatically), no retry-on-401 (a 401/403 here means
+// "not logged in"/"not an admin", which the caller surfaces as a normal ApiError, not a
+// token-refresh case). credentials: "include" matters even though the Vite dev proxy
+// (vite.config.ts) already makes every request same-origin, where `fetch`'s own default
+// would already send the cookie - explicit here so this keeps working if BASE_URL ever
+// points at a real absolute cross-origin URL in a non-proxied deployment.
 // Exposes buildUrl for the rare case a caller needs a plain href rather than a fetch
 // wrapper - currently only DC Selection's sample-CSV download links (a real browser
 // <a href> GET, not a JSON response apiGet could return).
@@ -60,6 +66,7 @@ export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> 
   const res = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -79,14 +86,17 @@ export async function apiGet<T>(path: string, params?: QueryParams): Promise<T> 
   return (await res.json()) as T;
 }
 
-// POST counterpart to apiGet - currently only /admin/config/ uses this. csrf_exempt on
-// the backend (no session/auth system exists anywhere in this API), so no CSRF token is
-// sent here either - same trust boundary as every GET call, just a mutation this time.
+// POST counterpart to apiGet. Every POST endpoint (including /auth/login/ and the new
+// /admin/users/* family) is @csrf_exempt server-side - Django session cookies default to
+// SameSite=Lax, which already blocks a cross-site POST from carrying the cookie, so this
+// deliberately doesn't implement a separate CSRF-token fetch/header round trip on top of
+// that for what's still a same-origin SPA (see client.ts's own top comment).
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const url = buildUrl(path);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "include",
     body: JSON.stringify(body),
   });
 
@@ -116,6 +126,7 @@ export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { Accept: "application/json" },
+    credentials: "include",
     body: form,
   });
 
@@ -156,6 +167,7 @@ export async function apiGetPaginated<T>(
   const res = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
 
   if (!res.ok) {

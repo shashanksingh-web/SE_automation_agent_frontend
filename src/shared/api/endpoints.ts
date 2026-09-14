@@ -34,6 +34,8 @@ import type {
 } from "@/shared/types/feedback";
 import type { RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import type { DCCardResponse } from "@/shared/types/dcCard";
+import type { AuthenticatedUser } from "@/features/rbac/types";
+import type { UserRow, CreateUserPayload } from "@/shared/types/users";
 
 // ---------------------------------------------------------------------------
 // §6 Directory / Lookup endpoints - populate every dropdown/typeahead. Nine
@@ -210,6 +212,48 @@ export const runsApi = {
       plan_date: planDate || undefined,
       actor,
     }),
+};
+
+// ---------------------------------------------------------------------------
+// Real auth (added 2026-09-14, planning/auth_views.py) - login/logout/session-restore/
+// self-service password change. A deliberately separate wire convention (camelCase,
+// matching AuthenticatedUser exactly) from the rest of this file's PascalCase admin-
+// facing API family - see that type's own note. Consumed by features/auth/AuthContext,
+// not called directly by feature panels the way the rest of this file is.
+// ---------------------------------------------------------------------------
+export const authApi = {
+  login: (username: string, password: string) =>
+    apiPost<AuthenticatedUser>("/auth/login/", { username, password }),
+
+  logout: () => apiPost<Record<string, never>>("/auth/logout/", {}),
+
+  // 401 (ApiError) means "no session" - an expected, routine outcome on every
+  // logged-out page load, not something the caller should treat as a failure.
+  me: () => apiGet<AuthenticatedUser>("/auth/me/"),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiPost<Record<string, never>>("/auth/change-password/", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+};
+
+// ---------------------------------------------------------------------------
+// Admin Panel user management (added 2026-09-14, planning/auth_views.py) - the one
+// part of the admin surface that actually requires an authenticated ADMIN session
+// server-side (require_admin) - every other /admin/* endpoint below still doesn't,
+// see this session's own scoping note in auth_views.py's module docstring.
+// ---------------------------------------------------------------------------
+export const usersApi = {
+  list: () => apiGet<UserRow[]>("/admin/users/"),
+
+  create: (payload: CreateUserPayload) => apiPost<UserRow>("/admin/users/create/", payload),
+
+  setActive: (id: number, isActive: boolean) =>
+    apiPost<UserRow>(`/admin/users/${id}/set-active/`, { is_active: isActive }),
+
+  resetPassword: (id: number, newPassword: string) =>
+    apiPost<Record<string, never>>(`/admin/users/${id}/reset-password/`, { new_password: newPassword }),
 };
 
 // ---------------------------------------------------------------------------

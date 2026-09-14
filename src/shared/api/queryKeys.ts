@@ -52,4 +52,5 @@ export const queryKeys = {
     ["dc-selection", "search", q, filterMode, offset] as const,
   dcSelectionPreview: (rulesKey: string, uploadMode: string) =>
     ["dc-selection", "preview", rulesKey, uploadMode] as const,
+  users: () => ["users"] as const,
 };
