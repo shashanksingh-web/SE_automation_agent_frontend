@@ -78,9 +78,10 @@ function findOriginOutlierNote(exceptions: Exception[], seId: string): string | 
 }
 
 // Plan A (Models 1-3) vs Plan B (Beat Planning / Cluster-Based Model, added 2026-08-31)
-// vs Plan C (AI-Reasoned via an LLM, added 2026-09-11 - see RoutingPlanSelector for why
-// there's no "Plan C" button there yet) - a PlanRun only ever has one family's rows, so
-// plan_type alone tells you which family produced what's shown here (routePlanFamily).
+// vs Plan C (AI-Reasoned via an LLM, added 2026-09-11, now 3 routes as of 2026-09-15 -
+// see RoutingPlanSelector for why there's no "Plan C" button there yet) - a PlanRun only
+// ever has one family's rows, so plan_type alone tells you which family produced what's
+// shown here (routePlanFamily).
 const PLAN_LABELS: Record<RoutePlan["plan_type"], string> = {
   PRIORITY_MAX: "Priority-Max",
   DISTANCE_MIN: "Distance-Min",
@@ -89,7 +90,17 @@ const PLAN_LABELS: Record<RoutePlan["plan_type"], string> = {
   CLUSTER_SCOREMAX: "Cluster Score-Maximizing",
   CLUSTER_DISTMIN: "Cluster Distance-Minimizing",
   LLM_REASONED: "AI-Reasoned",
+  LLM_REASONED_VALUE_MAX: "AI-Reasoned Value-Max",
+  LLM_REASONED_DISTMIN: "AI-Reasoned Distance-Min",
 };
+
+// Same convention as TaskTable.tsx/DCCardPanel's own currencyFormatter - a bare number
+// (e.g. "5993104") reads as ambiguous next to a km/min figure, not obviously Rupees.
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
 
 // §10 - one card per plan, feasible first, is_default_selected pre-highlighted.
 // select fires the /select/<plan_type>/ call. 422 (no route data / no DCs) is
@@ -235,10 +246,28 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
                       {n.message}
                     </p>
                   ))}
-                <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
                   <Stat label="Stops" value={plan.stop_count} />
                   <Stat label="Distance" value={`${plan.total_distance_km} km`} />
                   <Stat label="Total time" value={`${plan.total_minutes} min`} />
+                  <Stat
+                    label="Value captured"
+                    value={
+                      plan.expected_value_captured != null
+                        ? currencyFormatter.format(plan.expected_value_captured)
+                        : "-"
+                    }
+                    title={
+                      plan.expected_value_dc_count < plan.stop_count
+                        ? `Only ${plan.expected_value_dc_count} of ${plan.stop_count} stops had a real Present_Outstanding/Last_Order_Value figure on file - the rest contributed Rs.0, not fabricated.`
+                        : "Sum of Present_Outstanding + Last_Order_Value across this route's stops - real Rupees, not the (currently unavailable) AI Sales Forecast."
+                    }
+                  />
+                  <Stat
+                    label="Value / km"
+                    value={plan.value_per_km != null ? currencyFormatter.format(plan.value_per_km) : "-"}
+                    title="Value captured divided by total distance - compares routes of different lengths on Rupees realized per km driven."
+                  />
                 </div>
                 {plan.stops.length > 0 && (
                   <p className="text-xs text-muted-foreground">
@@ -277,9 +306,9 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value, title }: { label: string; value: string | number; title?: string }) {
   return (
-    <div className="rounded-md border px-2 py-1.5">
+    <div className="rounded-md border px-2 py-1.5" title={title}>
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="text-sm font-medium">{value}</div>
     </div>

@@ -2,15 +2,15 @@
 // 2026-08-31) vs Plan C (AI-Reasoned via an LLM, added 2026-09-11 -
 // planning/models.py RoutePlan.PlanType) - one PlanRun only ever generates one family's
 // rows (planning/routing.py: generate_route_plans_for_se's plan_choice branch), chosen
-// via ?routing_plan=A|B at plan-generation time (see scopeApi.get/normalizationApi.tuff),
-// not at routes-list time. Plan C is deliberately ONE row, not 3 (R5.1's "minimum 3"
-// doesn't apply to a single-model LLM mode) - and isn't triggerable from this app yet:
-// the HTTP API's own ?routing_plan= validation (planning/views.py
-// _routing_plan_choice_from_get) still only accepts A/B, so a Plan C row only exists
-// today if it was generated via the interactive CLI (generate_se_plan.py/
-// activate_tuff.py --routing-plan C). LLM_REASONED is included here purely so the Plan
-// Drawer can correctly display one if it shows up, not to imply it can be requested
-// from this UI.
+// via ?routing_plan=A|B|C at plan-generation time (see scopeApi.get/normalizationApi.tuff),
+// not at routes-list time. CHANGED 2026-09-15, explicit user request ("in plan c provide
+// all routes") - Plan C now produces 3 rows too, same as Plan A/B: LLM_REASONED (route 1,
+// whatever style the Admin Panel has configured), LLM_REASONED_VALUE_MAX (route 2,
+// explicitly told to maximize real Rupee value captured), LLM_REASONED_DISTMIN (route 3,
+// explicitly told to minimize distance) - see planning/routing.py's plan_choice=="C"
+// branch. Previously ONE row; existing rows generated before this change still carry
+// only LLM_REASONED and render exactly as before (routePlanFamily still resolves it to
+// "C" on its own).
 export type RoutePlanType =
   | "PRIORITY_MAX"
   | "DISTANCE_MIN"
@@ -18,7 +18,9 @@ export type RoutePlanType =
   | "CLUSTER_BASED"
   | "CLUSTER_SCOREMAX"
   | "CLUSTER_DISTMIN"
-  | "LLM_REASONED";
+  | "LLM_REASONED"
+  | "LLM_REASONED_VALUE_MAX"
+  | "LLM_REASONED_DISTMIN";
 
 export const CLUSTER_PLAN_TYPES: RoutePlanType[] = [
   "CLUSTER_BASED",
@@ -26,8 +28,14 @@ export const CLUSTER_PLAN_TYPES: RoutePlanType[] = [
   "CLUSTER_DISTMIN",
 ];
 
+export const LLM_REASONED_PLAN_TYPES: RoutePlanType[] = [
+  "LLM_REASONED",
+  "LLM_REASONED_VALUE_MAX",
+  "LLM_REASONED_DISTMIN",
+];
+
 export function routePlanFamily(planType: RoutePlanType): "A" | "B" | "C" {
-  if (planType === "LLM_REASONED") return "C";
+  if (LLM_REASONED_PLAN_TYPES.includes(planType)) return "C";
   return CLUSTER_PLAN_TYPES.includes(planType) ? "B" : "A";
 }
 
@@ -39,6 +47,14 @@ export interface RouteStop {
   purposes: string;
   distance_from_prev_km: number;
   travel_time_from_prev_min: number;
+  // Real DC name/geo, joined server-side from DC_Master_Normalized.json (added
+  // 2026-09-15 - RouteStop itself persists no lat/lon, see that model's own docstring).
+  // latitude/longitude are null for a real, confirmed reason: ~60% of DCs network-wide
+  // have no coordinates on file at all (DC_Master data gap, not a bug) - RouteMap must
+  // skip these from the map/route rather than plotting (0, 0) or guessing.
+  dc_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface DroppedDC {
@@ -75,6 +91,23 @@ export interface RoutePlan {
   // satisfied - flagged, not re-decided (stop selection is never re-run against it).
   distance_source: DistanceSource;
   google_exceeds_cap: boolean;
+  // ROI overlay (added 2026-09-15, explicit user request - "provide proper how its
+  // effect the roi in no [number]"), every plan family (A/B/C). Real Rupees:
+  // sum of (Present_Outstanding + Last_Order_Value) across this route's stops -
+  // deliberately NOT the Pitching Agent's AI Sales Forecast, which runs AFTER Routing
+  // in the pipeline and so cannot exist yet at route-generation time (planning/
+  // routing.py: se_daily_plan_agent.attach_roi_metrics). null (not 0) whenever NONE of
+  // this route's stops had either figure on file - check expected_value_dc_count
+  // before reading a null as "genuinely zero value here."
+  expected_value_captured: number | null;
+  // expected_value_captured / total_distance_km - lets routes of different lengths be
+  // compared on real-Rupees-per-km, not just raw total. null whenever
+  // expected_value_captured itself is null, or the route's distance is ~0.
+  value_per_km: number | null;
+  // How many of this route's stop_count stops actually contributed a real Rupee
+  // figure - "Rs.0 from 0 of 5 stops with data" must never be shown the same as
+  // "Rs.0 from 5 of 5 stops that genuinely have no value at stake."
+  expected_value_dc_count: number;
   // Plan C only (planning/models.py RoutePlan.llm_reasoning) - the LLM's own
   // explanation for these stops/order, plus any system notes (a hallucinated DC_ID
   // dropped, a cap-breach trim) appended by build_route_llm_reasoned. null for every
