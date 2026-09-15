@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, AlertTriangle, X } from "lucide-react";
 import {
   Drawer,
@@ -25,7 +25,7 @@ import { RouteMap } from "@/features/routing/RouteMap";
 import { StatusBanner, ReviewedBadge } from "@/features/views/shared/StatusBanner";
 import { SingleSelectCombobox, type SingleSelectOption } from "@/shared/components/SingleSelectCombobox";
 import { cn } from "@/shared/lib/cn";
-import type { RoutePlan, RoutePlanType } from "@/shared/types/routing";
+import type { RoutePlan, RoutePlanType, PitchCardFailure, PitchCardStatus } from "@/shared/types/routing";
 import { routePlanFamily } from "@/shared/types/routing";
 import type { Exception } from "@/shared/types/planRun";
 import { ApiError } from "@/shared/api/client";
@@ -129,6 +129,22 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
   const addStopMutation = useAddRouteStop(se ?? "", planDate);
   const removeStopMutation = useRemoveRouteStop(se ?? "", planDate);
 
+  // Pitching Agent + DC Card status from the last select/accept/add-stop/remove-stop
+  // call (added 2026-09-15, explicit follow-up request - "provide the status like
+  // fetching the data and creating the pitch"). Stays synchronous (no polling): the
+  // spinner below covers the whole mutation call, then this holds its result until the
+  // next one fires. See PitchCardStatus/PitchCardFailure in shared/types/routing.ts and
+  // resync_daily_tasks_from_selected_plan in planning/routing.py for the full contract.
+  const [pitchStatus, setPitchStatus] = useState<{
+    status: PitchCardStatus;
+    dcsRefreshed: string[];
+    failures: PitchCardFailure[];
+  } | null>(null);
+  const onPitchCardResult = (data: { pitch_card_status: PitchCardStatus; dcs_refreshed: string[]; pitch_failures: PitchCardFailure[] }) =>
+    setPitchStatus({ status: data.pitch_card_status, dcsRefreshed: data.dcs_refreshed, failures: data.pitch_failures });
+  const isFetchingPitchData =
+    selectMutation.isPending || acceptMutation.isPending || addStopMutation.isPending || removeStopMutation.isPending;
+
   // Only an SE gets Accept/Reject + add/remove-DC rights on their OWN plan (every other
   // role keeps the plain "Select" browsing button, unchanged) - same role check
   // RoutingPlanSelector already uses to lock the A/B/C picker for SE.
@@ -197,6 +213,28 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
           </p>
         )}
 
+        {isFetchingPitchData && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Fetching data &amp; creating pitch...
+          </div>
+        )}
+        {!isFetchingPitchData && pitchStatus?.status === "regenerated" && (
+          <div className="rounded-md border bg-accent/40 px-3 py-2 text-xs text-muted-foreground">
+            Pitch &amp; DC Card updated for {pitchStatus.dcsRefreshed.length} DC{pitchStatus.dcsRefreshed.length === 1 ? "" : "s"}.
+          </div>
+        )}
+        {!isFetchingPitchData && pitchStatus?.status === "failed" && (
+          <div className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <p className="flex items-center gap-1 font-semibold">
+              <AlertTriangle className="h-3.5 w-3.5" /> Pitch/DC Card failed for {pitchStatus.failures.length} DC
+              {pitchStatus.failures.length === 1 ? "" : "s"}:
+            </p>
+            {pitchStatus.failures.map((f, i) => (
+              <p key={i}>{f.detail}</p>
+            ))}
+          </div>
+        )}
+
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading route plans...
@@ -243,6 +281,7 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
               rejectMutation={rejectMutation}
               addStopMutation={addStopMutation}
               removeStopMutation={removeStopMutation}
+              onPitchCardResult={onPitchCardResult}
             />
           ))}
         </div>
@@ -262,6 +301,7 @@ interface PlanCardProps {
   rejectMutation: ReturnType<typeof useRejectRoutePlan>;
   addStopMutation: ReturnType<typeof useAddRouteStop>;
   removeStopMutation: ReturnType<typeof useRemoveRouteStop>;
+  onPitchCardResult: (data: { pitch_card_status: PitchCardStatus; dcs_refreshed: string[]; pitch_failures: PitchCardFailure[] }) => void;
 }
 
 // Extracted to its own top-level component (added 2026-09-15, alongside SE's
@@ -280,6 +320,7 @@ function PlanCard({
   rejectMutation,
   addStopMutation,
   removeStopMutation,
+  onPitchCardResult,
 }: PlanCardProps) {
   // Sourced from THIS route's own dropped_dcs (added 2026-09-15, explicit follow-up
   // request - "list of dc when we select only those which are eligible pool"; was
@@ -353,7 +394,7 @@ function PlanCard({
               size="sm"
               variant={plan.is_default_selected ? "secondary" : "default"}
               disabled={!plan.feasible || acceptMutation.isPending}
-              onClick={() => acceptMutation.mutate(plan.plan_type)}
+              onClick={() => acceptMutation.mutate(plan.plan_type, { onSuccess: onPitchCardResult })}
             >
               Accept
             </Button>
@@ -363,7 +404,7 @@ function PlanCard({
             size="sm"
             variant={plan.is_default_selected ? "secondary" : "outline"}
             disabled={!plan.feasible || selectMutation.isPending}
-            onClick={() => selectMutation.mutate(plan.plan_type)}
+            onClick={() => selectMutation.mutate(plan.plan_type, { onSuccess: onPitchCardResult })}
           >
             Select
           </Button>
@@ -432,7 +473,12 @@ function PlanCard({
                           : `Remove ${name ?? stop.dc_id} from this route`
                       }
                       disabled={plan.stops.length <= 1 || editsPending}
-                      onClick={() => removeStopMutation.mutate({ planType: plan.plan_type, dcId: stop.dc_id })}
+                      onClick={() =>
+                        removeStopMutation.mutate(
+                          { planType: plan.plan_type, dcId: stop.dc_id },
+                          { onSuccess: onPitchCardResult },
+                        )
+                      }
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -450,7 +496,9 @@ function PlanCard({
               value=""
               placeholder="Add a DC from your scope..."
               disabled={editsPending}
-              onChange={(dcId) => addStopMutation.mutate({ planType: plan.plan_type, dcId })}
+              onChange={(dcId) =>
+                addStopMutation.mutate({ planType: plan.plan_type, dcId }, { onSuccess: onPitchCardResult })
+              }
             />
             {editsPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>

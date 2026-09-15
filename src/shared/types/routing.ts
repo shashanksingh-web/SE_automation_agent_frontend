@@ -156,6 +156,25 @@ export interface RoutesResponse {
   plans: RoutePlan[];
 }
 
+// Pitching Agent + DC Card status, echoed on every resync that changes which DCs are on
+// a route (select/accept/add-stop/remove-stop) - added 2026-09-15, see
+// resync_daily_tasks_from_selected_plan in planning/routing.py for the full contract.
+// Stays synchronous (this whole response only arrives once the work is done - there is
+// no separate polling endpoint), so the caller shows a "fetching data / creating
+// pitch..." state for the duration of the request itself, then reads this field once it
+// resolves.
+export type PitchCardStatus = "regenerated" | "failed" | "skipped_no_stops" | "skipped_not_selected";
+
+// One entry per DC whose Pitching/DC Card generation failed this call - same shape
+// persisted to ExceptionRecord server-side. detail already embeds which DC (record_id)
+// failed and why.
+export interface PitchCardFailure {
+  record_id: string;
+  source: string;
+  reason_code: string;
+  detail: string;
+}
+
 // GET /routes/<se>/<plan_date>/select/<plan_type>/ (select_default_route_plan,
 // planning/routing.py) returns a small confirmation object, NOT the same {plans: [...]}
 // list shape as the plain routes GET above - flips is_default_selected server-side and
@@ -167,6 +186,9 @@ export interface SelectRoutePlanResponse {
   se_id: string;
   selected: RoutePlanType;
   daily_tasks_resynced: number;
+  pitch_card_status: PitchCardStatus;
+  dcs_refreshed: string[];
+  pitch_failures: PitchCardFailure[];
 }
 
 // GET /routes/<se>/<plan_date>/accept/<plan_type>/ (accept_route_plan, planning/
@@ -202,6 +224,9 @@ export interface EditRouteStopResponse {
   total_minutes: number;
   feasible: boolean;
   daily_tasks_resynced: number;
+  pitch_card_status: PitchCardStatus;
+  dcs_refreshed: string[];
+  pitch_failures: PitchCardFailure[];
 }
 
 export const ROUTE_PLAN_TYPES: RoutePlanType[] = [
