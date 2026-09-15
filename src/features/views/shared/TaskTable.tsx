@@ -415,7 +415,10 @@ function isResyncedTask(task: Task): boolean {
 
 // The planned-vs-actual reconciliation block (OutcomePanel concern, §7): only
 // meaningful once Reconciled_At is set, so it's a distinct "Actuals" section
-// rather than columns that are blank for every future/unreconciled task.
+// rather than columns that are blank for every future/unreconciled task. CHANGED
+// 2026-09-15, explicit user request ("Actuals (not yet reconciled) hide this
+// section") - previously always rendered (dimmed, labeled "(not yet reconciled)")
+// even with nothing to show; now omitted entirely until hasReconciliation is true.
 function TaskDetailRow({
   task,
   hasReconciliation,
@@ -605,17 +608,17 @@ function TaskDetailRow({
         <ClubStandingDetail club={task.Club_Detail} />
       </div>
 
-      <div className={cn("sm:col-span-2 lg:col-span-4 rounded-md border p-3", !hasReconciliation && "opacity-60")}>
-        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Actuals {!hasReconciliation && "(not yet reconciled)"}
+      {hasReconciliation && (
+        <div className="sm:col-span-2 lg:col-span-4 rounded-md border p-3">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Actuals</div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Outcome status" value={task.Outcome_Status} />
+            <Field label="Actual visit date" value={task.Actual_Visit_Date} />
+            <Field label="Actual order value" value={formatCurrency(task.Actual_Order_Value)} />
+            <Field label="Actual payment amount" value={formatCurrency(task.Actual_Payment_Amount)} />
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Outcome status" value={task.Outcome_Status} />
-          <Field label="Actual visit date" value={task.Actual_Visit_Date} />
-          <Field label="Actual order value" value={formatCurrency(task.Actual_Order_Value)} />
-          <Field label="Actual payment amount" value={formatCurrency(task.Actual_Payment_Amount)} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
