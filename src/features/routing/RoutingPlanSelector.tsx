@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useAppStore } from "@/shared/store/appStore";
 import { useAuth } from "@/features/auth/AuthContext";
-import { useAdminConfig } from "@/shared/api/hooks/useAdminConfig";
+import { useSeRoutingPlan } from "@/shared/api/hooks/useSeRoutingPlan";
 import { Button } from "@/shared/components/ui/button";
 import { Checkbox } from "@/shared/components/ui/checkbox";
 import { Badge } from "@/shared/components/ui/badge";
@@ -16,16 +16,6 @@ const PLAN_LABELS: Record<RoutingPlanChoice, string> = {
   C: "Plan C",
 };
 
-// Admin Control Panel -> Routing -> "SE view's routing plan" (planning/admin_config.py
-// se_routing_plan, added 2026-09-15). Reads the live effective value out of the same
-// AdminConfigResponse the Admin Control Panel itself edits - a plain lookup, not a
-// dedicated endpoint, since GET /admin/config/ already returns every field grouped.
-function useSeRoutingPlan(): RoutingPlanChoice {
-  const { data } = useAdminConfig();
-  const field = data?.Groups.flatMap((g) => g.Fields).find((f) => f.key === "se_routing_plan");
-  return (field?.value as RoutingPlanChoice) ?? "A";
-}
-
 // Global control, same pattern as DateSelector - which Routing Agent mode
 // (planning/models.py RoutePlan.PlanType, added 2026-08-31/2026-09-11) to generate:
 // Plan A (Priority-Max/Distance-Min/Balanced), Plan B (Beat Planning / Cluster-Based:
@@ -37,8 +27,8 @@ function useSeRoutingPlan(): RoutingPlanChoice {
 //
 // SE accounts get a read-only badge instead of this picker (added 2026-09-15, explicit
 // user request - "selection of plan should be restrict for SE"), showing whatever the
-// Admin Control Panel's "SE view's routing plan" field is set to (useSeRoutingPlan
-// above) - same isScopeValueLockedToSelf-style lock ScopeSelector already applies to
+// Admin Control Panel's "SE view's routing plan" field is set to (useSeRoutingPlan, in
+// shared/api/hooks) - same isScopeValueLockedToSelf-style lock ScopeSelector already applies to
 // SE/ABM/RBM's own scope value, just for the plan choice instead. Every other role
 // (Admin/ZBM/RBM/ABM) keeps the full interactive picker below, including when drilling
 // into a specific SE's own plan - the lock is role-based, not scope-based.
@@ -64,7 +54,7 @@ export function RoutingPlanSelector() {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const setEnableRotation = useAppStore((s) => s.setEnableRotation);
   const [confirmingC, setConfirmingC] = useState(false);
-  const seRoutingPlan = useSeRoutingPlan();
+  const { plan: seRoutingPlan, isResolved: seRoutingPlanResolved } = useSeRoutingPlan();
 
   // SE accounts don't get to choose their own routing plan (explicit user request,
   // 2026-09-15: "selection of plan should be restrict for SE") - an admin-controlled
@@ -72,12 +62,15 @@ export function RoutingPlanSelector() {
   // Pushed into the store here rather than left for the SE's own scope view to notice
   // it's wrong, same reasoning as ScopeSelector's isScopeValueLockedToSelf effect: a
   // value nobody ever explicitly sets stays stuck at appStore's initial default (Plan
-  // A) forever, silently ignoring whatever the admin actually configured.
+  // A) forever, silently ignoring whatever the admin actually configured. Waits for the
+  // config to resolve so it never pushes the loading-state fallback ("A") as if it were
+  // the admin's real choice - the scope queries are gated on the same signal
+  // (useRoutingPlanSettled), so nothing generates until this has run with the real value.
   useEffect(() => {
-    if (user?.role === "SE" && routingPlan !== seRoutingPlan) {
+    if (user?.role === "SE" && seRoutingPlanResolved && routingPlan !== seRoutingPlan) {
       setRoutingPlan(seRoutingPlan);
     }
-  }, [user, seRoutingPlan, routingPlan, setRoutingPlan]);
+  }, [user, seRoutingPlan, seRoutingPlanResolved, routingPlan, setRoutingPlan]);
 
   const isSE = user?.role === "SE";
 

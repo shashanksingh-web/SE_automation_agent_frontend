@@ -2,6 +2,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { scopeApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
 import { normalizePlanRun, mergeNormalizedPlanRuns } from "@/shared/api/normalize";
+import { useRoutingPlanSettled } from "@/shared/api/hooks/useSeRoutingPlan";
 import type { DateSelection, RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import { dateSelectionToQueryParam } from "@/shared/types/scope";
 import { useMemo } from "react";
@@ -16,6 +17,11 @@ import { useMemo } from "react";
 // scope GET regenerates the whole plan from scratch, a passive re-fetch that omitted it
 // would silently regenerate back to Plan A server-side even after the user picked Plan B
 // via Create/Refresh.
+//
+// Both hooks stay disabled until useRoutingPlanSettled says the plan they'd send is the
+// one that will stick - for an SE that's "the admin-configured plan has loaded and is in
+// the store". Firing earlier meant a wasted default-plan generation that then blocked
+// the real one on the DB write lock (see useSeRoutingPlan.ts).
 export function useScopePlanRun(
   segment: ScopePathSegment,
   scopeValue: string | undefined,
@@ -23,6 +29,7 @@ export function useScopePlanRun(
   routingPlan: RoutingPlanChoice,
   enableRotation: boolean,
 ) {
+  const settled = useRoutingPlanSettled(routingPlan);
   return useQuery({
     queryKey: queryKeys.scope(segment, scopeValue ?? "", date, routingPlan, enableRotation),
     queryFn: () =>
@@ -31,7 +38,7 @@ export function useScopePlanRun(
         routing_plan: routingPlan,
         rotation: enableRotation,
       }),
-    enabled: !!scopeValue,
+    enabled: !!scopeValue && settled,
     select: normalizePlanRun,
   });
 }
@@ -45,6 +52,7 @@ export function useMultiScopePlanRuns(
   routingPlan: RoutingPlanChoice,
   enableRotation: boolean,
 ) {
+  const settled = useRoutingPlanSettled(routingPlan);
   const results = useQueries({
     queries: scopeValues.map((scopeValue) => ({
       queryKey: queryKeys.scope(segment, scopeValue, date, routingPlan, enableRotation),
@@ -54,6 +62,7 @@ export function useMultiScopePlanRuns(
           routing_plan: routingPlan,
           rotation: enableRotation,
         }),
+      enabled: settled,
       select: normalizePlanRun,
     })),
   });
