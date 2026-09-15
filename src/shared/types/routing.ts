@@ -62,6 +62,13 @@ export interface RouteStop {
 export interface DroppedDC {
   dc_id: string;
   reason: string;
+  // Added 2026-09-15 - PlanDrawer's add-a-DC picker sources its options from THIS
+  // list (see planning/routing.py's RouteDroppedDC docstring: "every candidate the
+  // Ranked_Pool offered either appears in RouteStop or here" - i.e. this route's own
+  // real eligible pool, not just any DC assigned to the SE, explicit user request
+  // "list of dc when we select only those which are eligible pool"). null on the rare
+  // dc_id DC_Master itself has no name for.
+  dc_name: string | null;
 }
 
 // Google Maps route-accuracy overlay (added 2026-09-10, wired into this API 2026-09-10)

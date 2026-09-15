@@ -28,7 +28,6 @@ import { cn } from "@/shared/lib/cn";
 import type { RoutePlan, RoutePlanType } from "@/shared/types/routing";
 import { routePlanFamily } from "@/shared/types/routing";
 import type { Exception } from "@/shared/types/planRun";
-import type { DCDirectoryEntry } from "@/shared/types/directory";
 import { ApiError } from "@/shared/api/client";
 
 interface PlanDrawerProps {
@@ -238,7 +237,6 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
               isSE={isSE}
               isEditableDate={isEditableDate}
               resolvedDcNames={resolvedDcNames}
-              seDcs={seDcs?.dcs}
               routingNotes={routingNotes.filter((n) => n.planType === plan.plan_type)}
               selectMutation={selectMutation}
               acceptMutation={acceptMutation}
@@ -258,7 +256,6 @@ interface PlanCardProps {
   isSE: boolean;
   isEditableDate: boolean;
   resolvedDcNames: Record<string, string>;
-  seDcs: DCDirectoryEntry[] | undefined;
   routingNotes: RoutingNote[];
   selectMutation: ReturnType<typeof useSelectRoutePlan>;
   acceptMutation: ReturnType<typeof useAcceptRoutePlan>;
@@ -277,7 +274,6 @@ function PlanCard({
   isSE,
   isEditableDate,
   resolvedDcNames,
-  seDcs,
   routingNotes,
   selectMutation,
   acceptMutation,
@@ -285,10 +281,18 @@ function PlanCard({
   addStopMutation,
   removeStopMutation,
 }: PlanCardProps) {
-  const existingIds = new Set(plan.stops.map((s) => s.dc_id));
-  const addableOptions: SingleSelectOption[] = (seDcs ?? [])
-    .filter((dc) => !existingIds.has(dc.dc_id))
-    .map((dc) => ({ value: dc.dc_id, label: dc.dc_name, sublabel: dc.dc_id }));
+  // Sourced from THIS route's own dropped_dcs (added 2026-09-15, explicit follow-up
+  // request - "list of dc when we select only those which are eligible pool"; was
+  // previously every DC assigned to the SE, per an earlier explicit choice, but that
+  // included DCs excluded by Program DC Selection/eligibility rules that never reached
+  // this route's own Ranked_Pool at all - see edit_route_stops' own docstring for why
+  // dropped_dcs is the correct "eligible pool" source, and RouteDroppedDC's docstring
+  // for why it's guaranteed to cover every eligible candidate this route didn't select).
+  // Geo_Incomplete-reasoned drops are excluded - the routing agent already knows those
+  // can't be routed to.
+  const addableOptions: SingleSelectOption[] = plan.dropped_dcs
+    .filter((d) => d.reason !== "Geo_Incomplete")
+    .map((d) => ({ value: d.dc_id, label: d.dc_name ?? d.dc_id, sublabel: d.dc_id }));
 
   const editsPending = addStopMutation.isPending || removeStopMutation.isPending;
   const editError =
