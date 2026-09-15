@@ -1,3 +1,5 @@
+import type { PlanRunStatus } from "@/shared/types/planRun";
+
 // Plan A (existing 3 models) vs Plan B (Beat Planning / Cluster-Based Model, added
 // 2026-08-31) vs Plan C (AI-Reasoned via an LLM, added 2026-09-11 -
 // planning/models.py RoutePlan.PlanType) - one PlanRun only ever generates one family's
@@ -108,6 +110,15 @@ export interface RoutePlan {
   // figure - "Rs.0 from 0 of 5 stops with data" must never be shown the same as
   // "Rs.0 from 5 of 5 stops that genuinely have no value at stake."
   expected_value_dc_count: number;
+  // True once an SE has added/removed a stop via the edit-route-stops endpoints below
+  // (added 2026-09-15, explicit user request - "if se wants add the dc in route plan
+  // than he will add or wants to delete the route he will"). Distances/times ARE
+  // recomputed for real on every edit, but priority_score_captured/
+  // expected_value_captured above are NOT - RouteStop persists no per-stop priority/
+  // financial breakdown to recompute them from - so this flags the UI to caveat those
+  // two numbers as reflecting the algorithm's ORIGINAL stop set, not the current
+  // (edited) one.
+  manually_edited: boolean;
   // Plan C only (planning/models.py RoutePlan.llm_reasoning) - the LLM's own
   // explanation for these stops/order, plus any system notes (a hallucinated DC_ID
   // dropped, a cap-breach trim) appended by build_route_llm_reasoned. null for every
@@ -128,6 +139,13 @@ export interface RoutesResponse {
   se_id: string;
   se_name: string;
   plan_date: string;
+  // Whole-DAY approval state (added 2026-09-15, see accept_route_plan/reject_route_plan
+  // in planning/routing.py) - a PlanRun-level field, not per-route, so it's here once
+  // rather than repeated on every RoutePlan in `plans`. reviewed_by/reviewed_at are null
+  // until an SE has Accepted or Rejected at least once for this PlanRun.
+  status: PlanRunStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   plans: RoutePlan[];
 }
 
@@ -141,6 +159,41 @@ export interface SelectRoutePlanResponse {
   plan_run_id: string;
   se_id: string;
   selected: RoutePlanType;
+  daily_tasks_resynced: number;
+}
+
+// GET /routes/<se>/<plan_date>/accept/<plan_type>/ (accept_route_plan, planning/
+// routing.py, added 2026-09-15) - an SE's own "Accept" action. Same shape as
+// SelectRoutePlanResponse plus the PlanRun's new APPROVED status, since Accept does the
+// same pick+resync AND marks the whole day's plan approved in one call.
+export interface AcceptRoutePlanResponse extends SelectRoutePlanResponse {
+  status: PlanRunStatus;
+}
+
+// GET /routes/<se>/<plan_date>/reject/ (reject_route_plan, planning/routing.py, added
+// 2026-09-15) - an SE's own "Reject" action. Rejects the whole day's PlanRun (not one
+// specific route alternative - PlanRun.status is a PlanRun-level field); deliberately
+// does not touch DailyTask (explicit follow-up choice: "keeps existing tasks untouched").
+export interface RejectRoutePlanResponse {
+  plan_run_id: string;
+  se_id: string;
+  status: PlanRunStatus;
+}
+
+// GET /routes/<se>/<plan_date>/<plan_type>/stops/add|remove/?dc_id=... (edit_route_stops,
+// planning/routing.py, added 2026-09-15) - an SE adding/removing a DC from their own
+// route. Real distances/times are recomputed server-side (see that function's own
+// docstring) but not echoed here beyond the totals below - the caller refetches the full
+// routes list (same pattern useSelectRoutePlan already uses) to get the updated stop list.
+export interface EditRouteStopResponse {
+  plan_run_id: string;
+  plan_type: RoutePlanType;
+  action: "add" | "remove";
+  dc_id: string;
+  stop_count: number;
+  total_distance_km: number;
+  total_minutes: number;
+  feasible: boolean;
   daily_tasks_resynced: number;
 }
 

@@ -23,7 +23,14 @@ import type {
   TuffResponse,
   NormalizationResult,
 } from "@/shared/types/planRun";
-import type { RoutesResponse, RoutePlanType, SelectRoutePlanResponse } from "@/shared/types/routing";
+import type {
+  RoutesResponse,
+  RoutePlanType,
+  SelectRoutePlanResponse,
+  AcceptRoutePlanResponse,
+  RejectRoutePlanResponse,
+  EditRouteStopResponse,
+} from "@/shared/types/routing";
 import type {
   PitchResponse,
   HeadcountResponse,
@@ -139,6 +146,51 @@ export const routingApi = {
     apiGet<SelectRoutePlanResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/select/${planType}/`,
       params,
+    ),
+
+  // SE's own Accept/Reject/add-DC/remove-DC actions (added 2026-09-15, explicit user
+  // request - "In se have the right ... accept and reject cta ... add the dc ... or
+  // wants to delete"). See planning/routing.py accept_route_plan/reject_route_plan/
+  // edit_route_stops for the real validation/recompute behind each of these.
+  accept: (
+    se: string,
+    planDate: string,
+    planType: RoutePlanType,
+    params?: { plan_run?: string; actor?: string },
+  ) =>
+    apiGet<AcceptRoutePlanResponse>(
+      `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/accept/${planType}/`,
+      params,
+    ),
+
+  reject: (se: string, planDate: string, params?: { plan_run?: string; actor?: string }) =>
+    apiGet<RejectRoutePlanResponse>(
+      `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/reject/`,
+      params,
+    ),
+
+  addStop: (
+    se: string,
+    planDate: string,
+    planType: RoutePlanType,
+    dcId: string,
+    params?: { plan_run?: string },
+  ) =>
+    apiGet<EditRouteStopResponse>(
+      `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/${planType}/stops/add/`,
+      { ...params, dc_id: dcId },
+    ),
+
+  removeStop: (
+    se: string,
+    planDate: string,
+    planType: RoutePlanType,
+    dcId: string,
+    params?: { plan_run?: string },
+  ) =>
+    apiGet<EditRouteStopResponse>(
+      `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/${planType}/stops/remove/`,
+      { ...params, dc_id: dcId },
     ),
 };
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, X } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -10,14 +10,25 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
-import { useRoutes, useSelectRoutePlan } from "@/shared/api/hooks/useRoutes";
+import {
+  useRoutes,
+  useSelectRoutePlan,
+  useAcceptRoutePlan,
+  useRejectRoutePlan,
+  useAddRouteStop,
+  useRemoveRouteStop,
+} from "@/shared/api/hooks/useRoutes";
 import { useDCs } from "@/shared/api/hooks/useDirectory";
+import { useAuth } from "@/features/auth/AuthContext";
 import { rememberDCName, getCachedDCName } from "@/shared/lib/dcNameCache";
 import { RouteMap } from "@/features/routing/RouteMap";
+import { StatusBanner, ReviewedBadge } from "@/features/views/shared/StatusBanner";
+import { SingleSelectCombobox, type SingleSelectOption } from "@/shared/components/SingleSelectCombobox";
 import { cn } from "@/shared/lib/cn";
 import type { RoutePlan, RoutePlanType } from "@/shared/types/routing";
 import { routePlanFamily } from "@/shared/types/routing";
 import type { Exception } from "@/shared/types/planRun";
+import type { DCDirectoryEntry } from "@/shared/types/directory";
 import { ApiError } from "@/shared/api/client";
 
 interface PlanDrawerProps {
@@ -102,12 +113,31 @@ const currencyFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
+// SE's own route-editing rights (added 2026-09-15, explicit user request - "In se have
+// the right ... accept and reject cta ... add the dc ... or wants to delete", follow-up
+// choice: edits allowed up to and including today, never a date that's passed).
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+
 // §10 - one card per plan, feasible first, is_default_selected pre-highlighted.
 // select fires the /select/<plan_type>/ call. 422 (no route data / no DCs) is
 // an empty state, not an error.
 export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClose }: PlanDrawerProps) {
+  const { user } = useAuth();
   const { data, isLoading, isError, error } = useRoutes(se ?? undefined, planDate);
   const selectMutation = useSelectRoutePlan(se ?? "", planDate);
+  const acceptMutation = useAcceptRoutePlan(se ?? "", planDate, undefined, user?.email);
+  const rejectMutation = useRejectRoutePlan(se ?? "", planDate, undefined, user?.email);
+  const addStopMutation = useAddRouteStop(se ?? "", planDate);
+  const removeStopMutation = useRemoveRouteStop(se ?? "", planDate);
+
+  // Only an SE gets Accept/Reject + add/remove-DC rights on their OWN plan (every other
+  // role keeps the plain "Select" browsing button, unchanged) - same role check
+  // RoutingPlanSelector already uses to lock the A/B/C picker for SE.
+  const isSE = user?.role === "SE";
+  // Edits (add/remove DC) are only allowed for today or a future date, never one that's
+  // already passed - enforced server-side too (edit_route_stops' own date check), this
+  // just avoids showing controls that would 422 if used.
+  const isEditableDate = planDate >= TODAY_ISO;
 
   // Backfill for any stop not covered by the caller's dcNames (e.g. a dropped candidate,
   // or a stop on a route alternative other than today's selected one - see this prop's
@@ -156,6 +186,18 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
           <DrawerDescription>{planDate}</DrawerDescription>
         </DrawerHeader>
 
+        {data && (
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBanner status={data.status} errorMessage={null} />
+            <ReviewedBadge reviewedBy={data.reviewed_by} reviewedAt={data.reviewed_at} />
+          </div>
+        )}
+        {rejectMutation.isError && (
+          <p className="text-xs text-destructive">
+            {rejectMutation.error instanceof ApiError ? rejectMutation.error.message : "Could not reject this plan."}
+          </p>
+        )}
+
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading route plans...
@@ -190,119 +232,236 @@ export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClos
 
         <div className="space-y-3 overflow-auto">
           {sortedPlans.map((plan) => (
-            <Card
+            <PlanCard
               key={plan.plan_type}
-              className={cn(
-                !plan.feasible && "opacity-60",
-                plan.is_default_selected && "border-primary ring-1 ring-primary",
-              )}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  {PLAN_LABELS[plan.plan_type]}
-                  {plan.is_default_selected && <Badge>Selected</Badge>}
-                  {!plan.feasible && <Badge variant="destructive">Infeasible</Badge>}
-                  {plan.distance_source === "google_maps" && (
-                    <Badge
-                      variant="secondary"
-                      title="Distance/time for this route come from a real Google Maps Directions API call, not the Haversine x 1.4 estimate."
-                    >
-                      Google Maps verified
-                    </Badge>
-                  )}
-                  {plan.google_exceeds_cap && (
-                    <Badge
-                      variant="warning"
-                      title="Real Google Maps road distance/time for this route exceeds the cap the Haversine estimate had satisfied. Stops were not re-selected against this - only flagged."
-                    >
-                      <AlertTriangle className="mr-1 h-3 w-3" />
-                      Exceeds cap on real roads
-                    </Badge>
-                  )}
-                </CardTitle>
-                <Button
-                  size="sm"
-                  variant={plan.is_default_selected ? "secondary" : "outline"}
-                  disabled={!plan.feasible || selectMutation.isPending}
-                  onClick={() => selectMutation.mutate(plan.plan_type)}
-                >
-                  Select
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!plan.feasible && plan.infeasibility_reason && (
-                  <p className="text-xs text-destructive">{plan.infeasibility_reason}</p>
-                )}
-                {plan.llm_reasoning && (
-                  <div className="rounded-md border bg-accent/40 px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">AI reasoning:</span>{" "}
-                    {plan.llm_reasoning}
-                  </div>
-                )}
-                {routingNotes
-                  .filter((n) => n.planType === plan.plan_type)
-                  .map((n, i) => (
-                    <p key={i} className="text-xs text-muted-foreground">
-                      {n.message}
-                    </p>
-                  ))}
-                <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-                  <Stat label="Stops" value={plan.stop_count} />
-                  <Stat label="Distance" value={`${plan.total_distance_km} km`} />
-                  <Stat label="Total time" value={`${plan.total_minutes} min`} />
-                  <Stat
-                    label="Value captured"
-                    value={
-                      plan.expected_value_captured != null
-                        ? currencyFormatter.format(plan.expected_value_captured)
-                        : "-"
-                    }
-                    title={
-                      plan.expected_value_dc_count < plan.stop_count
-                        ? `Only ${plan.expected_value_dc_count} of ${plan.stop_count} stops had a real Present_Outstanding/Last_Order_Value figure on file - the rest contributed Rs.0, not fabricated.`
-                        : "Sum of Present_Outstanding + Last_Order_Value across this route's stops - real Rupees, not the (currently unavailable) AI Sales Forecast."
-                    }
-                  />
-                  <Stat
-                    label="Value / km"
-                    value={plan.value_per_km != null ? currencyFormatter.format(plan.value_per_km) : "-"}
-                    title="Value captured divided by total distance - compares routes of different lengths on Rupees realized per km driven."
-                  />
-                </div>
-                {plan.stops.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Includes the return trip back to origin at day's end - not broken out as its own stop below,
-                    which is why the stop list's distances/times add up to less than the totals above.
-                  </p>
-                )}
-                <RouteMap plan={plan} />
-                {plan.stops.length > 0 && (
-                  <ol className="max-h-32 space-y-1 overflow-auto text-xs text-muted-foreground">
-                    {plan.stops.map((stop) => {
-                      const name = resolvedDcNames[stop.dc_id] ?? getCachedDCName(stop.dc_id);
-                      return (
-                        <li key={stop.dc_id}>
-                          {stop.sequence_no}. {name ? `${name} (DC ${stop.dc_id})` : `DC ${stop.dc_id}`} -{" "}
-                          {stop.purposes} ({stop.distance_from_prev_km} km, {stop.travel_time_from_prev_min} min)
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
-                {plan.dropped_dcs.length > 0 && (
-                  <p className="text-xs text-warning-foreground">
-                    {plan.dropped_dcs.length} DC(s) dropped from this plan.
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Generated {new Date(plan.generated_at).toLocaleString()}
-                </p>
-              </CardContent>
-            </Card>
+              plan={plan}
+              isSE={isSE}
+              isEditableDate={isEditableDate}
+              resolvedDcNames={resolvedDcNames}
+              seDcs={seDcs?.dcs}
+              routingNotes={routingNotes.filter((n) => n.planType === plan.plan_type)}
+              selectMutation={selectMutation}
+              acceptMutation={acceptMutation}
+              rejectMutation={rejectMutation}
+              addStopMutation={addStopMutation}
+              removeStopMutation={removeStopMutation}
+            />
           ))}
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+interface PlanCardProps {
+  plan: RoutePlan;
+  isSE: boolean;
+  isEditableDate: boolean;
+  resolvedDcNames: Record<string, string>;
+  seDcs: DCDirectoryEntry[] | undefined;
+  routingNotes: RoutingNote[];
+  selectMutation: ReturnType<typeof useSelectRoutePlan>;
+  acceptMutation: ReturnType<typeof useAcceptRoutePlan>;
+  rejectMutation: ReturnType<typeof useRejectRoutePlan>;
+  addStopMutation: ReturnType<typeof useAddRouteStop>;
+  removeStopMutation: ReturnType<typeof useRemoveRouteStop>;
+}
+
+// Extracted to its own top-level component (added 2026-09-15, alongside SE's
+// Accept/Reject/add-remove-DC rights) - each card now owns real per-card state (the
+// "add a DC" picker's current selection), which would remount/lose state on every
+// PlanDrawer re-render if this stayed inline (same nested-component anti-pattern
+// UserTableRow was deliberately refactored away from earlier this session).
+function PlanCard({
+  plan,
+  isSE,
+  isEditableDate,
+  resolvedDcNames,
+  seDcs,
+  routingNotes,
+  selectMutation,
+  acceptMutation,
+  rejectMutation,
+  addStopMutation,
+  removeStopMutation,
+}: PlanCardProps) {
+  const existingIds = new Set(plan.stops.map((s) => s.dc_id));
+  const addableOptions: SingleSelectOption[] = (seDcs ?? [])
+    .filter((dc) => !existingIds.has(dc.dc_id))
+    .map((dc) => ({ value: dc.dc_id, label: dc.dc_name, sublabel: dc.dc_id }));
+
+  const editsPending = addStopMutation.isPending || removeStopMutation.isPending;
+  const editError =
+    (addStopMutation.isError && addStopMutation.variables?.planType === plan.plan_type) ||
+    (removeStopMutation.isError && removeStopMutation.variables?.planType === plan.plan_type)
+      ? addStopMutation.error ?? removeStopMutation.error
+      : null;
+
+  return (
+    <Card
+      className={cn(
+        !plan.feasible && "opacity-60",
+        plan.is_default_selected && "border-primary ring-1 ring-primary",
+      )}
+    >
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+          {PLAN_LABELS[plan.plan_type]}
+          {plan.is_default_selected && <Badge>Selected</Badge>}
+          {!plan.feasible && <Badge variant="destructive">Infeasible</Badge>}
+          {plan.manually_edited && (
+            <Badge
+              variant="secondary"
+              title="This route's stops were edited by the SE. Distance/time above are recomputed for real, but Value captured/Value per km still reflect the algorithm's ORIGINAL stop set, not this edited one."
+            >
+              Manually edited
+            </Badge>
+          )}
+          {plan.distance_source === "google_maps" && (
+            <Badge
+              variant="secondary"
+              title="Distance/time for this route come from a real Google Maps Directions API call, not the Haversine x 1.4 estimate."
+            >
+              Google Maps verified
+            </Badge>
+          )}
+          {plan.google_exceeds_cap && (
+            <Badge
+              variant="warning"
+              title="Real Google Maps road distance/time for this route exceeds the cap the Haversine estimate had satisfied. Stops were not re-selected against this - only flagged."
+            >
+              <AlertTriangle className="mr-1 h-3 w-3" />
+              Exceeds cap on real roads
+            </Badge>
+          )}
+        </CardTitle>
+        {isSE ? (
+          <div className="flex shrink-0 gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={rejectMutation.isPending}
+              onClick={() => rejectMutation.mutate()}
+            >
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              variant={plan.is_default_selected ? "secondary" : "default"}
+              disabled={!plan.feasible || acceptMutation.isPending}
+              onClick={() => acceptMutation.mutate(plan.plan_type)}
+            >
+              Accept
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant={plan.is_default_selected ? "secondary" : "outline"}
+            disabled={!plan.feasible || selectMutation.isPending}
+            onClick={() => selectMutation.mutate(plan.plan_type)}
+          >
+            Select
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!plan.feasible && plan.infeasibility_reason && (
+          <p className="text-xs text-destructive">{plan.infeasibility_reason}</p>
+        )}
+        {plan.llm_reasoning && (
+          <div className="rounded-md border bg-accent/40 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-semibold uppercase tracking-wide">AI reasoning:</span> {plan.llm_reasoning}
+          </div>
+        )}
+        {routingNotes.map((n, i) => (
+          <p key={i} className="text-xs text-muted-foreground">
+            {n.message}
+          </p>
+        ))}
+        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+          <Stat label="Stops" value={plan.stop_count} />
+          <Stat label="Distance" value={`${plan.total_distance_km} km`} />
+          <Stat label="Total time" value={`${plan.total_minutes} min`} />
+          <Stat
+            label="Value captured"
+            value={plan.expected_value_captured != null ? currencyFormatter.format(plan.expected_value_captured) : "-"}
+            title={
+              plan.manually_edited
+                ? "Reflects the algorithm's ORIGINAL stop set, not this route's current (manually edited) one - RouteStop doesn't persist enough per-stop data to recompute it after an edit."
+                : plan.expected_value_dc_count < plan.stop_count
+                  ? `Only ${plan.expected_value_dc_count} of ${plan.stop_count} stops had a real Present_Outstanding/Last_Order_Value figure on file - the rest contributed Rs.0, not fabricated.`
+                  : "Sum of Present_Outstanding + Last_Order_Value across this route's stops - real Rupees, not the (currently unavailable) AI Sales Forecast."
+            }
+          />
+          <Stat
+            label="Value / km"
+            value={plan.value_per_km != null ? currencyFormatter.format(plan.value_per_km) : "-"}
+            title="Value captured divided by total distance - compares routes of different lengths on Rupees realized per km driven."
+          />
+        </div>
+        {plan.stops.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Includes the return trip back to origin at day's end - not broken out as its own stop below, which is
+            why the stop list's distances/times add up to less than the totals above.
+          </p>
+        )}
+        <RouteMap plan={plan} />
+        {plan.stops.length > 0 && (
+          <ol className="space-y-1 text-xs text-muted-foreground">
+            {plan.stops.map((stop) => {
+              const name = resolvedDcNames[stop.dc_id] ?? getCachedDCName(stop.dc_id);
+              return (
+                <li key={stop.dc_id} className="flex items-center justify-between gap-2">
+                  <span>
+                    {stop.sequence_no}. {name ? `${name} (DC ${stop.dc_id})` : `DC ${stop.dc_id}`} - {stop.purposes} (
+                    {stop.distance_from_prev_km} km, {stop.travel_time_from_prev_min} min)
+                  </span>
+                  {isSE && isEditableDate && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      title={
+                        plan.stops.length <= 1
+                          ? "Cannot remove the only stop on this route - Reject the whole route instead."
+                          : `Remove ${name ?? stop.dc_id} from this route`
+                      }
+                      disabled={plan.stops.length <= 1 || editsPending}
+                      onClick={() => removeStopMutation.mutate({ planType: plan.plan_type, dcId: stop.dc_id })}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {isSE && isEditableDate && (
+          <div className="flex items-center gap-2">
+            <SingleSelectCombobox
+              className="w-64"
+              options={addableOptions}
+              value=""
+              placeholder="Add a DC from your scope..."
+              disabled={editsPending}
+              onChange={(dcId) => addStopMutation.mutate({ planType: plan.plan_type, dcId })}
+            />
+            {editsPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+        )}
+        {editError && (
+          <p className="text-xs text-destructive">
+            {editError instanceof ApiError ? editError.message : "Could not update this route."}
+          </p>
+        )}
+        {plan.dropped_dcs.length > 0 && (
+          <p className="text-xs text-warning-foreground">{plan.dropped_dcs.length} DC(s) dropped from this plan.</p>
+        )}
+        <p className="text-xs text-muted-foreground">Generated {new Date(plan.generated_at).toLocaleString()}</p>
+      </CardContent>
+    </Card>
   );
 }
 
