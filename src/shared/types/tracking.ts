@@ -104,6 +104,8 @@ export interface TrackingDataHealth {
   Live_Pull_Failures_By_Source: Record<string, number>;
   Runs_With_A_Failure: number;
   Runs_With_A_Failure_Pct: number | null;
+  // Newest failure in the window - tells an incident that's over from one still running.
+  Last_Failure_At: string | null;
   Normalization_Last_Run_At: string | null;
   DC_Master_Rows: number | null;
   DC_Master_Geo_Coverage_Pct: number | null;
