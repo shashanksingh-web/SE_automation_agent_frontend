@@ -3,7 +3,17 @@
   "configurations": [
     {
       "name": "se-frontend",
-      "url": "http://localhost:5173"
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "autoPort": false
+    },
+    {
+      "name": "se-backend",
+      "runtimeExecutable": "/Users/dehaat/Desktop/SE_automation_server/venv/bin/python",
+      "runtimeArgs": ["/Users/dehaat/Desktop/SE_automation_server/manage.py", "runserver", "8000"],
+      "port": 8000,
+      "autoPort": false
     }
   ]
 }
