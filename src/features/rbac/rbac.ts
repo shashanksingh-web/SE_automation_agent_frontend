@@ -59,6 +59,8 @@ export function resolveDefaultView(user: AuthenticatedUser): RoleResolution {
           "admin",
           // System Plan Runs (added 2026-09-10) - ADMIN role only, same as "admin" above.
           "system-plan-runs",
+          // Tracking dashboard (added 2026-09-16) - ADMIN role only.
+          "tracking",
           "zbm",
           "state",
           "district",

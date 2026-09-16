@@ -43,6 +43,7 @@ import type { RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import type { DCCardResponse } from "@/shared/types/dcCard";
 import type { AuthenticatedUser } from "@/features/rbac/types";
 import type { UserRow, CreateUserPayload } from "@/shared/types/users";
+import type { TrackingResponse } from "@/shared/types/tracking";
 
 // ---------------------------------------------------------------------------
 // §6 Directory / Lookup endpoints - populate every dropdown/typeahead. Nine
@@ -336,6 +337,12 @@ export const adminApi = {
   // a string for a "choice" field (e.g. Plan C's decision style), a number otherwise.
   updateConfig: (changes: Record<string, number | string>, reset: string[] = [], actor?: string) =>
     apiPost<AdminConfigResponse>("/admin/config/", { changes, reset, actor }),
+};
+
+// Tracking dashboard (added 2026-09-16, planning/tracking.py) - one read-only
+// aggregation over what the pipeline already persists, windowed by generation time.
+export const trackingApi = {
+  get: (days: number) => apiGet<TrackingResponse>(`/admin/tracking/?days=${days}`),
 };
 
 // ---------------------------------------------------------------------------

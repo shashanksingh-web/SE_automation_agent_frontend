@@ -51,6 +51,9 @@ export type ViewType =
   // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
   // ADMIN role only (see resolveDefaultView in features/rbac/rbac.ts).
   | "admin"
+  // Tracking dashboard (added 2026-09-16) - outcomes/adoption/quality/data-health/ops
+  // metrics over recent plan runs (planning/tracking.py). ADMIN role only.
+  | "tracking"
   // System Plan Runs (added 2026-09-10, explicit user request - moved out of the Admin
   // Control Panel's own tab bar into its own top-level nav item, "with Overall, ZBM/
   // State Head, State, RBM, ABM") - every PlanRun network-wide, full filter set. ADMIN
