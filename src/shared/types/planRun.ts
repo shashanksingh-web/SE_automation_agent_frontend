@@ -5,6 +5,48 @@
 // all null once already tiered, or if Qualifying_Turnover doesn't clear even Copper's
 // entry threshold. The two halves are mutually exclusive in practice (a DC is either
 // already tiered, or - if not - may have an eligible-if-cleared tier), never both set.
+// One objective's score, as computed for a specific DC (planning/views.py: _serialize_
+// task's BO_Scores, raw passthrough of se_daily_plan_agent.py's dc_bo_scores dict - see
+// Task.BO_Scores). grade is null when the underlying score is genuinely undefined (e.g.
+// a Config_Ambiguous PL_Expected case), not a fabricated placeholder. basis is only
+// present for some objectives (e.g. Outstanding tag which live source computed the
+// score; PL doesn't) - confirmed from real API responses, not every key is always set.
+export interface BOScore {
+  // Confirmed nullable from real API responses (e.g. "no 4.4 growth multiplier defined
+  // for category 'FERTILIZERS'") - a provisional/unscoreable case, not always a real
+  // percentage. null score_pct always pairs with grade: null too.
+  score_pct: number | null;
+  grade: "A" | "B" | "C" | "D" | null;
+  reason: string;
+  basis?: string;
+  // Sales/BO4 only, added 2026-09-04 - REMOVED 2026-09-07 (explicit user request,
+  // "Stop computing Sales & Long-Term entirely") along with BO4/BO5 scoring itself; a
+  // "Sales" key never appears in BO_Scores at all anymore, only Outstanding/PL. Kept
+  // optional here (not deleted) only because PlanRuns generated before 2026-09-07 still
+  // carry real historical mom_trend_pct data in their persisted BO_Scores JSON, viewable
+  // via Run history - a plain month-over-month sales ratio (this 30d / prior 30d),
+  // purely informational and never fed into score_pct/grade/BO_Composite_Score.
+  mom_trend_pct?: number | null;
+}
+
+// One component of a DC's Composite Health Score (Source 3k, se_daily_plan_agent.py
+// compute_dc_health_score - added 2026-09-06). Keys are component names (NRV, GM,
+// GM_Pct, PL_Contribution, Return, Credit, OD). Credit/OD were hardcoded score_pct: 0/
+// bucket: "Worst" for every DC until 2026-09-07 (data-access-blocked on a Locus-to-
+// sap_partner_id bridge gap that turned out not to exist - "locus" is a third database
+// reachable via the same Redshift connection as everything else) - both are now real,
+// live-computed values like every other component, and DO participate in
+// Health_Focus_Track qualification like the rest (no longer excluded). score_pct: null
+// for a DC with too little history to compute Credit (fewer than 5 qualifying payments)
+// or OD (no bridge/aging match) - missing-component rule treats it as 0 in the weighted
+// composite, same as any other component, never a guess.
+export interface HealthSubScore {
+  score_pct: number | null;
+  bucket: "Strong" | "Fine" | "Weak" | "Worst";
+  // CLAMP((0.60 - score_pct) / 0.60, 0, 1) - continuous, not just the bucket label.
+  urgency: number;
+}
+
 export interface ClubDetail {
   Is_Club_Enrolled: boolean | null;
   Qualifying_Turnover: number | null;
@@ -66,11 +108,93 @@ export interface Task {
   // live it genuinely changes over a DC's order history. null means no order has this
   // field populated at all, not an assumed "non_financed".
   Finance_Status: "financed" | "non_financed" | null;
+  // Full per-DC BO score dict (se_daily_plan_agent.py DailyTaskRow.BO_Scores, added
+  // 2026-09-03) - the DC's complete score set as computed, not just the objective(s)
+  // that actually matched/qualified it into this task (those already show up in
+  // Reason_Of_Visit's own prose). Only ever contains Outstanding/PL as of 2026-09-07
+  // (explicit user request, "Stop computing Sales & Long-Term entirely" - BO4/BO5
+  // scoring removed entirely, not just excluded from selection like before) - Visits
+  // stays a candidate-pool qualifier only, never per-DC scored, same as always. A
+  // PlanRun generated before 2026-09-07 can still carry a real historical "Sales" key
+  // (viewable via Run history) - not fabricated, just from before this removal. null/{}
+  // when no BO scores were supplied for this DC this run.
+  BO_Scores: Record<string, BOScore> | null;
+  // Unweighted average of whatever score_pct/ratio/coverage_pct values BO_Scores has
+  // (None entries skipped, not treated as 0 - se_daily_plan_agent.py _bo_composite_score,
+  // added 2026-09-03). Not a confirmed/weighted formula - it averages differently-scaled
+  // ratios (Outstanding's health_pct is capped 0-1; PL's momentum ratio can exceed 1.0,
+  // so this can read above 1.0 for real outperformance). A brief 2026-09-06 GR-31
+  // override made this prefer DC_Health_Score/100 when a real Health Score existed, but
+  // that was REVERTED 2026-09-07 (explicit user request, "Health Score is a separate
+  // score, not related to BO scoring" -> fully decouple) - always the plain BO-objective
+  // average again, unconditionally, never influenced by Health Score. null when
+  // BO_Scores had nothing usable to average.
+  BO_Composite_Score: number | null;
+  // 1 = lowest BO_Composite_Score (worst-performing/most in need of attention) among
+  // THIS SE's own day's task list only (se_daily_plan_agent.py _assign_bo_ranks) - not a
+  // network-wide rank, and not the same as Sr_No (the actual selection order). Dense
+  // ranking: equal composite scores share a rank. null when there's no composite score
+  // to rank by (e.g. a Farmer Meeting task, or no BO scores this run).
+  BO_Rank: number | null;
+  // DC Composite Health Score (Source 3k, added 2026-09-06) - a separate, parallel 1-100
+  // scoring model from BO1-5, fully decoupled from it (a brief 2026-09-06 override made
+  // it drive BO_Composite_Score/BO_Rank above, reverted 2026-09-07 - see that field's own
+  // note). Only drives its own separate Health-Focus qualification track now, never
+  // ranking. null when this DC had no Health Score computed this run (failed the
+  // active/Days_Since_Last_Sale<=60 eligibility gate, or a genuinely inactive/onboarding
+  // DC) - never fabricated as 0.
+  DC_Health_Score: number | null;
+  // 100 - DC_Health_Score. Same nullability as DC_Health_Score.
+  Health_Gap: number | null;
+  // All 7 components (NRV/GM/GM_Pct/PL_Contribution/Return/Credit/OD), even when this
+  // DC didn't ultimately qualify for Health-Focus - shown for transparency same as the
+  // Health Card. {} when DC_Health_Score is null.
+  Health_Sub_Scores: Record<string, HealthSubScore> | null;
+  // True if this DC's raw GM_FY_Value or GM% was negative - GM/GM_Pct sub-scores are
+  // NOT run through the normal formula in that case (flagged for manual review instead
+  // of producing a score that breaks the 0-1 convention), per business-confirmed logic.
+  Negative_GM_Flag: boolean;
+  // Whether this DC was ALSO selected today via the separate Health-Focus qualification
+  // track (Weak/Worst on >=1 of the 5 live-computable components, or GR-28's current_
+  // od>0 force-include) - independent of whether it was also BO-driven; a DC can be
+  // both, see Health_Focus_Purposes.
+  Health_Focus_Track: boolean;
+  // Every qualifying component's purpose, "" + " " -joined (e.g. "Promise To Pay /
+  // Collection + Sale"), ordered Collection > Sale (business-confirmed priority when
+  // multiple components qualify at once) - a plain joined string, not an array
+  // (se_daily_plan_agent.py DailyTaskRow.Health_Focus_Purposes is a CharField). "" when
+  // Health_Focus_Track is false.
+  Health_Focus_Purposes: string;
+  // Credit line detail (added 2026-09-07, explicit user request) - raw fields from
+  // credit_line_customercreditline (Locus DB), the same source Credit_Score's own
+  // pct_paid_in_due/ard formula reads from (see Health_Sub_Scores.Credit) - NOT derived
+  // from Credit_Score itself, a separate raw signal. null on all three when this DC has
+  // no credit line row at all (same missing-component convention as every other Health
+  // Score input - never guessed), independent of whether Credit_Score itself computed.
+  Credit_Limit: number | null; // Total sanctioned limit.
+  Available_Credit_Limit: number | null; // Remaining/utilizable credit.
+  Credit_Active: boolean | null; // credit_line_customercreditline.status === "ACTIVE".
+  // Promise To Pay tracking (Source 3j, added 2026-09-04) - the DC's MOST RECENT
+  // commitment only (older ones are superseded). Promise_Status: "Pending" (date hasn't
+  // arrived yet, too early to judge), "Kept" (a real SUCCESS payment landed between the
+  // promise and its date - not required to cover the full amount), "Broken" (date
+  // passed, no qualifying payment - this still force-qualifies the DC for Outstanding
+  // regardless of balance, unaffected by the 2026-09-07 change below - but no longer
+  // appends to Critical_Reasons/sets Critical on its own, see that field's own note), or
+  // null (no promise on record for this DC). A zero-amount promise is a real recorded
+  // commitment here, not junk data to filter out.
+  Promise_To_Pay_Date: string | null;
+  Promise_To_Pay_Amount: number | null;
+  Promise_Status: "Pending" | "Kept" | "Broken" | null;
   // Cross-cutting "cover this one first" signal (confirmed 2026-08-18) - chronic miss
   // escalation (DCVisitStreak.consecutive_misses >= ESCALATION_THRESHOLD), a real
-  // overdue balance aged 90+ days, or credit-on-hold. Critical_Reasons is a
-  // semicolon-joined string of whichever of those actually applied (never fabricated -
-  // "" when Critical is false), same convention as Credit_On_Hold_Reason.
+  // overdue balance aged 90+ days, or credit-on-hold. A broken Promise To Pay used to
+  // also count (and was the most common reason shown in practice) but was explicitly
+  // removed 2026-09-07 - still fully visible via Promise_Status/_Date/_Amount and still
+  // force-qualifies Outstanding, just no longer flagged in this banner. Critical_Reasons
+  // is a semicolon-joined string of whichever of the 3 remaining conditions actually
+  // applied (never fabricated - "" when Critical is false), same convention as
+  // Credit_On_Hold_Reason.
   Critical: boolean;
   Critical_Reasons: string;
   // Planned-vs-actual reconciliation block - empty for future/unreconciled dates (§7).

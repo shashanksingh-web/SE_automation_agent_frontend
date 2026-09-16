@@ -1,4 +1,4 @@
-import type { ClubDetail } from "@/shared/types/planRun";
+import type { ClubDetail, HealthSubScore } from "@/shared/types/planRun";
 
 export interface BusinessAreaProduct {
   Name: string | null;
@@ -50,16 +50,34 @@ export interface TurnoverDetail {
   YTD_PL_Last_Year: number | null;
 }
 
+// Structured form of Card_Hindi's "3. Health Score" block (planning/dc_card.py:
+// _health_score_detail, added 2026-09-06; API serialization added 2026-09-07 - the
+// model field existed since the same commit but dc_card() never exposed it as its own
+// field until now, unlike every other card section). Sub_Scores keeps the same 7-
+// component shape as Task.Health_Sub_Scores (shared HealthSubScore type) - this is the
+// same underlying data, just scoped to one DC Card rather than the whole task list.
+// null when this DC had no Health Score computed this run.
+export interface HealthScoreDetail {
+  DC_Health_Score: number | null;
+  Health_Gap: number | null;
+  Sub_Scores: Record<string, HealthSubScore>;
+  Negative_GM_Flag: boolean;
+  Health_Focus_Track: boolean;
+  Health_Focus_Purposes: string;
+}
+
 // DC Card (Preface) - "Dehaat Center Ko Jaano" (planning/dc_card.py). A second,
 // complementary pre-pitch briefing shown when the SE opens a DC's card, BEFORE the
 // PitchScript's own Ask/Tell/Wish - originally matched pitch_config's "DC Card
 // (Preface)" CSV structure exactly (3 sections: Who / Where DC Stands / Private
 // Label), but Section 3 (प्राइवेट लेबल / Private Label) was removed 2026-09-03 per
 // direct instruction - the same recommended-products signal still reaches the SE via
-// PitchResponse's own Recommended_Products, just not duplicated here. Generated
-// automatically alongside PitchScript, same trigger point and per-DC-task cadence, but
-// its own DB row/endpoint (GET /dc-card/<daily_task_id>/) and its own 404 case for
-// Farmer Meeting tasks (no DC to brief on).
+// PitchResponse's own Recommended_Products, just not duplicated here. Section 3 is now
+// a genuinely NEW section instead (Health Score, added 2026-09-06) - not a repurposing
+// of the vacated Private Label slot. Generated automatically alongside PitchScript,
+// same trigger point and per-DC-task cadence, but its own DB row/endpoint (GET
+// /dc-card/<daily_task_id>/) and its own 404 case for Farmer Meeting tasks (no DC to
+// brief on).
 export interface DCCardResponse {
   DailyTask_ID: number;
   SE: string;
@@ -71,6 +89,11 @@ export interface DCCardResponse {
   // Same shape/meaning as Task's own Club_Detail (shared type, see planRun.ts) - backs
   // this card's "Scheme Standing" bullet instead of DailyTask.DC_Club_Participation.
   Club_Detail: ClubDetail | null;
+  // Hindi narrative for "3. Health Score" - same text already embedded in Card_Hindi
+  // below, exposed on its own so the frontend isn't forced to re-parse combined text.
+  // null when this DC had no Health Score computed this run.
+  Health_Score_Section: string | null;
+  Health_Score_Detail: HealthScoreDetail | null;
   Card_Hindi: string;
   Data_Sources_Used: string[];
   Data_Sources_Skipped: string[];

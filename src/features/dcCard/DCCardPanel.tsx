@@ -3,6 +3,7 @@ import { useDCCard } from "@/shared/api/hooks/useDCCard";
 import { ClubStandingDetail } from "@/shared/components/ClubStandingDetail";
 import { BusinessAreaStrengthCard } from "@/features/dcCard/BusinessAreaStrengthCard";
 import { TurnoverStandingCard } from "@/features/dcCard/TurnoverStandingCard";
+import { HealthScoreCard } from "@/features/dcCard/HealthScoreCard";
 import { Loader2 } from "lucide-react";
 
 interface DCCardPanelProps {
@@ -72,8 +73,10 @@ function SectionBody({ text }: { text: string }) {
 
 // DC Card (Preface) / "Dehaat Center Ko Jaano" (planning/dc_card.py) - a second,
 // complementary pre-pitch briefing shown before the Pitching Agent's own Ask/Tell/Wish.
-// 3 sections matching the CSV's own structure: Who, Where DC Stands, Private Label.
-// Same 404-as-empty-state contract as PitchPanel for Farmer Meeting tasks.
+// 3 sections: Who, Where DC Stands, Health Score (Source 3k, added 2026-09-06 - a
+// genuinely new section, not a repurposing of the CSV's original Private Label slot,
+// which was removed 2026-09-03 and stays vacated). Same 404-as-empty-state contract as
+// PitchPanel for Farmer Meeting tasks.
 export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) {
   const { data, isLoading, noCard, generationFailed } = useDCCard(dailyTaskId ?? undefined);
 
@@ -126,6 +129,12 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
               </div>
               <SectionBody text={data.Where_DC_Stands_Section} />
             </div>
+            {data.Health_Score_Detail && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-primary">3. Health Score</div>
+                <HealthScoreCard detail={data.Health_Score_Detail} />
+              </div>
+            )}
             <div className="border-t pt-3 text-xs text-muted-foreground">
               Generated {new Date(data.Generated_At).toLocaleString()}
             </div>
