@@ -87,14 +87,20 @@ export const directoryApi = {
 // (SE email, ABM/RBM employee code, Node/Block/District/State name).
 // ---------------------------------------------------------------------------
 export const scopeApi = {
+  // Moved from apiGet to apiPost 2026-09-16 (architecture audit, round 2) -- this
+  // endpoint creates a new PlanRun + DailyTask rows + triggers live Pitching/DC Card
+  // generation on every call, so it was never actually safe/idempotent despite being a
+  // GET. Safe for React Query's queryFn here (see useScopePlanRun.ts's own comment) --
+  // queryFn is transport-agnostic, so this doesn't change caching/dedup behavior, only
+  // the wire method.
   get: (
     segment: ScopePathSegment,
     scopeValue: string,
     params?: { date?: string; routing_plan?: RoutingPlanChoice; rotation?: boolean },
   ) =>
-    apiGet<PlanRunResponse>(
+    apiPost<PlanRunResponse>(
       `/${segment}/${encodeURIComponent(scopeValue)}/`,
-      params,
+      params ?? {},
     ),
 };
 
@@ -102,8 +108,12 @@ export const scopeApi = {
 // §9 Normalization + combined TUFF fetch.
 // ---------------------------------------------------------------------------
 export const normalizationApi = {
+  // Both moved from apiGet to apiPost 2026-09-16 (architecture audit, round 2) -- these
+  // trigger live Redshift pulls (normalize) or normalization + full plan generation
+  // combined (tuff, the heaviest mutation in this whole API) -- neither was ever
+  // actually safe/idempotent despite being GET.
   normalize: (params: { date: string; force?: boolean }) =>
-    apiGet<NormalizationResult>("/normalize/", {
+    apiPost<NormalizationResult>("/normalize/", {
       date: params.date,
       force: params.force,
     }),
@@ -121,9 +131,9 @@ export const normalizationApi = {
       rotation?: boolean;
     },
   ) =>
-    apiGet<TuffResponse>(
+    apiPost<TuffResponse>(
       `/tuff/${scopeType}/${encodeURIComponent(scopeValue)}/`,
-      params,
+      params ?? {},
     ),
 };
 
@@ -137,15 +147,21 @@ export const routingApi = {
       params,
     ),
 
+  // Select/Accept/Reject/add-DC/remove-DC all mutate PlanRun/RoutePlan/DailyTask/
+  // PitchScript/DCCard state - moved from apiGet to apiPost 2026-09-16 (architecture
+  // audit: GET is supposed to be safe/idempotent; browser prefetch, a proxy cache, or
+  // React Query's own refetch-on-window-focus could otherwise trigger a real mutation
+  // as a side effect of just viewing a link). See planning/views.py's matching views
+  // for the server-side half of this change.
   select: (
     se: string,
     planDate: string,
     planType: RoutePlanType,
     params?: { plan_run?: string },
   ) =>
-    apiGet<SelectRoutePlanResponse>(
+    apiPost<SelectRoutePlanResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/select/${planType}/`,
-      params,
+      params ?? {},
     ),
 
   // SE's own Accept/Reject/add-DC/remove-DC actions (added 2026-09-15, explicit user
@@ -158,15 +174,15 @@ export const routingApi = {
     planType: RoutePlanType,
     params?: { plan_run?: string; actor?: string },
   ) =>
-    apiGet<AcceptRoutePlanResponse>(
+    apiPost<AcceptRoutePlanResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/accept/${planType}/`,
-      params,
+      params ?? {},
     ),
 
   reject: (se: string, planDate: string, params?: { plan_run?: string; actor?: string }) =>
-    apiGet<RejectRoutePlanResponse>(
+    apiPost<RejectRoutePlanResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/reject/`,
-      params,
+      params ?? {},
     ),
 
   addStop: (
@@ -176,7 +192,7 @@ export const routingApi = {
     dcId: string,
     params?: { plan_run?: string },
   ) =>
-    apiGet<EditRouteStopResponse>(
+    apiPost<EditRouteStopResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/${planType}/stops/add/`,
       { ...params, dc_id: dcId },
     ),
@@ -188,7 +204,7 @@ export const routingApi = {
     dcId: string,
     params?: { plan_run?: string },
   ) =>
-    apiGet<EditRouteStopResponse>(
+    apiPost<EditRouteStopResponse>(
       `/routes/${encodeURIComponent(se)}/${encodeURIComponent(planDate)}/${planType}/stops/remove/`,
       { ...params, dc_id: dcId },
     ),
