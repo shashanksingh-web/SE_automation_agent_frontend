@@ -126,33 +126,7 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
               </div>
               <SectionBody text={data.Where_DC_Stands_Section} />
             </div>
-            <div className="flex flex-wrap gap-4 border-t pt-3">
-              {data.Data_Sources_Used.length > 0 && (
-                <div>
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Data sources used
-                  </div>
-                  <ul className="list-inside list-disc space-y-1 text-sm">
-                    {data.Data_Sources_Used.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {data.Data_Sources_Skipped.length > 0 && (
-                <div>
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Data sources skipped
-                  </div>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-                    {data.Data_Sources_Skipped.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="border-t pt-3 text-xs text-muted-foreground">
               Generated {new Date(data.Generated_At).toLocaleString()}
             </div>
           </div>
