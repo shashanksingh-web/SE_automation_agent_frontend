@@ -16,7 +16,10 @@ export interface TrackingWindow {
 // Tier 1 - does the plan change what SEs collect and sell. Sourced from DailyTask's
 // outcome_status / actual_* fields, which ONLY reconcile_outcomes writes.
 export interface TrackingOutcomes {
+  // Planned visits = distinct (SE, DC, plan_date); Task_Rows is the raw DailyTask count,
+  // which is far larger because every view load regenerates the scope's plan.
   Tasks_Planned: number;
+  Task_Rows: number;
   Tasks_Reconciled: number;
   Reconciliation_Rate_Pct: number | null;
   // All-time, not windowed - "has this ever run" is the question it answers.
@@ -30,6 +33,22 @@ export interface TrackingOutcomes {
   PTP_Promised_Amount: number | null;
   Chronic_Non_Execution_Pairs: number;
   Escalation_Threshold_Misses: number;
+  // All-time: past DC-visit tasks still UNKNOWN - what POST /admin/reconcile/ acts on.
+  Reconcilable_Now: number;
+}
+
+// POST /admin/reconcile/ - reconciles every past plan_date that still has UNKNOWN
+// tasks, network-wide; idempotent.
+export interface ReconcileResponse {
+  Dates: number;
+  Tasks: number;
+  Completed: number;
+  Partial: number;
+  Missed: number;
+  Escalated: number;
+  Payment_Amount: number;
+  Pull_Failures: string[];
+  Lines: string[];
 }
 
 // Tier 2 - do SEs accept the plan or fight it.

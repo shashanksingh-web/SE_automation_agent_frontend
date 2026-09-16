@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { trackingApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
 
@@ -10,5 +10,15 @@ export function useTracking(days: number) {
     queryKey: queryKeys.tracking(days),
     queryFn: () => trackingApi.get(days),
     staleTime: 60_000,
+  });
+}
+
+// "Reconcile now" - after it lands, every tracking window is stale (outcomes changed
+// for past dates in all of them), so the whole admin-tracking family is invalidated.
+export function useReconcileOutcomes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => trackingApi.reconcile(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-tracking"] }),
   });
 }

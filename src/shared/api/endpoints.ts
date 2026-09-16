@@ -43,7 +43,7 @@ import type { RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import type { DCCardResponse } from "@/shared/types/dcCard";
 import type { AuthenticatedUser } from "@/features/rbac/types";
 import type { UserRow, CreateUserPayload } from "@/shared/types/users";
-import type { TrackingResponse } from "@/shared/types/tracking";
+import type { ReconcileResponse, TrackingResponse } from "@/shared/types/tracking";
 
 // ---------------------------------------------------------------------------
 // §6 Directory / Lookup endpoints - populate every dropdown/typeahead. Nine
@@ -343,6 +343,9 @@ export const adminApi = {
 // aggregation over what the pipeline already persists, windowed by generation time.
 export const trackingApi = {
   get: (days: number) => apiGet<TrackingResponse>(`/admin/tracking/?days=${days}`),
+  // Outcome reconciliation for every past plan_date still UNKNOWN (planning/
+  // reconciliation.py). ~15s network-wide for a week of backlog; idempotent.
+  reconcile: () => apiPost<ReconcileResponse>("/admin/reconcile/", {}),
 };
 
 // ---------------------------------------------------------------------------

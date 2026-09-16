@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
-import { useTracking } from "@/shared/api/hooks/useTracking";
+import { useReconcileOutcomes, useTracking } from "@/shared/api/hooks/useTracking";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { cn } from "@/shared/lib/cn";
@@ -195,6 +195,53 @@ export function TrackingView() {
   );
 }
 
+// Reconciliation status + the manual trigger. Reconciliation also runs on its own
+// inside every plan generation (for that scope's SEs), so this row is normally quiet;
+// the button matters for a backlog - the first ever run, or after days with no
+// generations - and for an admin who wants yesterday's numbers before anyone has
+// opened today's plan.
+function ReconcileRow({ outcomes: o }: { outcomes: TrackingResponse["Outcomes"] }) {
+  const reconcile = useReconcileOutcomes();
+  const never = o.Tasks_Reconciled === 0 && !o.Reconciliation_Last_Run_At;
+  const pending = o.Reconcilable_Now;
+  const tone = never ? "border-destructive/40 bg-destructive/10" : pending > 0 ? "border-warning/60 bg-warning/10" : "border bg-card";
+  const Icon = never ? XCircle : pending > 0 ? AlertTriangle : CheckCircle2;
+  const result = reconcile.data;
+  return (
+    <div className={cn("flex flex-wrap items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm", tone)}>
+      <div className="flex items-start gap-2">
+        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", never ? "text-destructive" : pending > 0 ? "text-warning-foreground" : "text-muted-foreground")} aria-hidden="true" />
+        <div>
+          {never ? (
+            <span className="font-medium">Outcome reconciliation has never run.</span>
+          ) : (
+            <span className="font-medium">Reconciliation last ran {fmtWhen(o.Reconciliation_Last_Run_At)}.</span>
+          )}{" "}
+          {pending > 0
+            ? `${pending.toLocaleString("en-IN")} past task rows have no outcome recorded yet.`
+            : "Every past planned visit has an outcome recorded. It also runs automatically each time a plan is generated."}
+          {result && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Just now: {result.Tasks.toLocaleString("en-IN")} task rows over {result.Dates} day{result.Dates === 1 ? "" : "s"} -{" "}
+              {result.Completed} completed, {result.Partial} partial, {result.Missed} missed, {fmtINR(result.Payment_Amount)} collected
+              {result.Pull_Failures.length > 0 && ` · ${result.Pull_Failures.length} live pull(s) failed`}.
+            </div>
+          )}
+          {reconcile.isError && (
+            <div className="mt-1 text-xs text-destructive">
+              {reconcile.error instanceof Error ? reconcile.error.message : "Reconciliation failed."}
+            </div>
+          )}
+        </div>
+      </div>
+      <Button size="sm" variant={pending > 0 ? "default" : "outline"} className="h-8" onClick={() => reconcile.mutate()} disabled={reconcile.isPending} title="Reconcile every past planned visit that still has no outcome, network-wide">
+        {reconcile.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+        {reconcile.isPending ? "Reconciling..." : pending > 0 ? `Reconcile ${pending.toLocaleString("en-IN")} now` : "Reconcile now"}
+      </Button>
+    </div>
+  );
+}
+
 function Tiers({ data }: { data: TrackingResponse }) {
   const { Window: win, Outcomes: o, Adoption: a, Quality: q, Data_Health: d, Ops: ops } = data;
   const neverReconciled = o.Tasks_Reconciled === 0;
@@ -206,35 +253,26 @@ function Tiers({ data }: { data: TrackingResponse }) {
         {win.Plan_Runs.toLocaleString("en-IN")} plan runs generated in the last {win.Days} days · computed {fmtWhen(data.Generated_At)}
       </div>
 
-      <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Only reconciliation writes these - everything else on this page is upstream of it.">
-        {neverReconciled && (
-          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-            <div>
-              <span className="font-medium">Outcome reconciliation has never run.</span>{" "}
-              {o.Tasks_Planned.toLocaleString("en-IN")} planned tasks in this window and none have an outcome recorded, so visit
-              execution, collection realised and sales after visit cannot be measured yet. Last run: {fmtWhen(o.Reconciliation_Last_Run_At)}.
-            </div>
-          </div>
-        )}
+      <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Counted per planned visit (one SE, one DC, one day) - a regenerated plan doesn't count twice. Only reconciliation writes these; everything else on this page is upstream of it.">
+        <ReconcileRow outcomes={o} />
         <Grid>
           <Tile
             hero
-            label={neverReconciled ? "Tasks reconciled" : "Visit execution rate"}
+            label={neverReconciled ? "Visits reconciled" : "Visit execution rate"}
             value={neverReconciled ? `${o.Tasks_Reconciled} / ${fmtNum(o.Tasks_Planned)}` : fmtPct(o.Visit_Execution_Rate_Pct)}
-            hint={neverReconciled ? "planned tasks with a recorded outcome" : `of ${fmtNum(o.Tasks_Reconciled)} reconciled tasks completed or partial`}
-            status={neverReconciled ? { status: "critical", label: "Never measured" } : { status: pctStatus(100 - (o.Visit_Execution_Rate_Pct ?? 0), 30, 50), label: "Measured" }}
+            hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Reconciled)} reconciled visits`}
+            status={neverReconciled ? { status: "critical", label: "Never measured" } : { status: pctStatus(100 - (o.Visit_Execution_Rate_Pct ?? 0), 30, 50), label: (o.Visit_Execution_Rate_Pct ?? 0) < 50 ? "Most visits missed" : "Healthy" }}
           />
-          <Tile label="Collection realised" value={fmtINR(o.Collection_Realised)} hint={`of ${fmtINR(o.Overdue_Pitched)} overdue pitched`} />
-          <Tile label="Sales after visit" value={fmtINR(o.Sales_After_Visit)} hint="order value recorded at reconciliation" />
-          <Tile label="Promises to pay" value={fmtNum(o.PTP_Promises)} hint={`${fmtINR(o.PTP_Promised_Amount)} promised · kept-rate needs reconciliation`} />
+          <Tile label="Collection realised" value={fmtINR(o.Collection_Realised)} hint={`paid within 2 days of the visit · ${fmtINR(o.Overdue_Pitched)} overdue pitched`} />
+          <Tile label="Sales after visit" value={fmtINR(o.Sales_After_Visit)} hint="ordered within 2 days of the visit" />
+          <Tile label="Promises to pay" value={fmtNum(o.PTP_Promises)} hint={`${fmtINR(o.PTP_Promised_Amount)} promised`} />
           <Tile
             label="Chronic non-execution"
             value={fmtNum(o.Chronic_Non_Execution_Pairs)}
-            hint={`SE–DC pairs at ${o.Escalation_Threshold_Misses}+ consecutive misses (all time)`}
+            hint={`SE–DC pairs missed ${o.Escalation_Threshold_Misses}+ days running (all time)`}
             status={{ status: o.Chronic_Non_Execution_Pairs > 0 ? "warning" : "good", label: o.Chronic_Non_Execution_Pairs > 0 ? "Escalated" : "None" }}
           />
-          <Tile label="Reconciliation rate" value={fmtPct(o.Reconciliation_Rate_Pct)} hint={`last run ${fmtWhen(o.Reconciliation_Last_Run_At)}`} />
+          <Tile label="Planned visits" value={fmtNum(o.Tasks_Planned)} hint={`${fmtPct(o.Reconciliation_Rate_Pct)} reconciled · ${fmtNum(o.Task_Rows)} task rows incl. regenerations`} />
         </Grid>
       </Section>
 
