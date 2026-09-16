@@ -51,16 +51,23 @@ export interface ReconcileResponse {
   Lines: string[];
 }
 
-// Tier 2 - do SEs accept the plan or fight it.
+// Tier 2 - do SEs accept the plan or fight it. Counted per SE-DAY (one SE, one plan
+// date, among SE-scope runs - the plan an SE sees in their own view), never per run:
+// every view load regenerates the plan, and an SE reviews one plan a day. A day's
+// verdict is its latest review; its route model of record is the selected plan on its
+// latest run. Plan_Runs is the raw count across every scope, for reference.
 export interface TrackingAdoption {
   Plan_Runs: number;
+  SE_Runs: number;
+  SE_Days: number;
+  Runs_Per_SE_Day: number | null;
   By_Status: Record<string, number>;
   Approved: number;
   Rejected: number;
   Reviewed: number;
   Reviewed_Rate_Pct: number | null;
   Route_Plans: number;
-  Manually_Edited_Routes: number;
+  Manually_Edited_Days: number;
   Manual_Edit_Rate_Pct: number | null;
   Selected_Plan_Type_Breakdown: Record<string, number>;
 }

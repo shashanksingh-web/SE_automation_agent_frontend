@@ -320,26 +320,31 @@ function Tiers({ data }: { data: TrackingResponse }) {
         </Grid>
       </Section>
 
-      <Section n={2} title="Adoption" blurb="Do SEs accept the plan or fight it. A high manual-edit rate on a node means the routing is wrong for that node.">
+      <Section n={2} title="Adoption" blurb="Do SEs accept the plan or fight it. Counted per SE-day (one SE, one plan date) - an SE reviews one plan a day, however many times it was regenerated. A day's verdict is its latest review.">
         <Grid>
-          <Tile label="Plan runs" value={fmtNum(a.Plan_Runs)} hint={`${a.Approved} approved · ${a.Rejected} rejected`} />
+          <Tile label="SE-days planned" value={fmtNum(a.SE_Days)} hint={`${fmtNum(a.SE_Runs)} SE plan runs · ${fmtNum(a.Plan_Runs)} runs across all scopes`} />
           <Tile
-            label="Reviewed by an SE"
+            label="Reviewed by the SE"
             value={fmtPct(a.Reviewed_Rate_Pct)}
-            hint={`${a.Reviewed} of ${a.Plan_Runs} runs accepted or rejected`}
+            hint={`${a.Approved} accepted · ${a.Rejected} rejected · ${a.By_Status.PENDING_REVIEW ?? 0} never reviewed`}
             status={{ status: (a.Reviewed_Rate_Pct ?? 0) < 20 ? "warning" : "good", label: (a.Reviewed_Rate_Pct ?? 0) < 20 ? "Low" : "Healthy" }}
           />
           <Tile
-            label="Routes manually edited"
-            value={fmtNum(a.Manually_Edited_Routes)}
-            hint={`${fmtPct(a.Manual_Edit_Rate_Pct)} of selected routes`}
+            label="Days with route edits"
+            value={fmtPct(a.Manual_Edit_Rate_Pct)}
+            hint={`${a.Manually_Edited_Days} of ${a.SE_Days} SE-days had a DC added or removed`}
             status={{ status: pctStatus(a.Manual_Edit_Rate_Pct ?? 0, 25, 50), label: (a.Manual_Edit_Rate_Pct ?? 0) > 25 ? "SEs overriding" : "Trusted" }}
           />
-          <Tile label="Route plans" value={fmtNum(a.Route_Plans)} hint="generated (3 per SE per run)" />
+          <Tile
+            label="Regenerations per SE-day"
+            value={a.Runs_Per_SE_Day === null ? "—" : `${a.Runs_Per_SE_Day}×`}
+            hint="every view load rebuilds the plan - each one a full pipeline run"
+            status={{ status: (a.Runs_Per_SE_Day ?? 0) > 3 ? "warning" : "good", label: (a.Runs_Per_SE_Day ?? 0) > 3 ? "Heavy churn" : "OK" }}
+          />
         </Grid>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Breakdown title="Run status" data={a.By_Status} />
-          <Breakdown title="Selected route model" data={a.Selected_Plan_Type_Breakdown} />
+          <Breakdown title="SE-day verdict" data={a.By_Status} />
+          <Breakdown title="Route model of record" data={a.Selected_Plan_Type_Breakdown} />
         </div>
       </Section>
 
