@@ -395,7 +395,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
             label="Runs hit by a live-pull failure"
             value={fmtPct(d.Runs_With_A_Failure_Pct)}
             hint={`${d.Runs_With_A_Failure} of ${win.Plan_Runs} runs · last failure ${fmtWhen(d.Last_Failure_At)}`}
-            status={{ status: pctStatus(d.Runs_With_A_Failure_Pct, 10, 30), label: (d.Runs_With_A_Failure_Pct ?? 0) > 10 ? "Degraded in window" : "Healthy" }}
+            status={{ status: pctStatus(d.Runs_With_A_Failure_Pct, 10, 30), label: (d.Runs_With_A_Failure_Pct ?? 0) > 10 ? "Degraded" : "Healthy" }}
           />
           <Tile label="Real failures" value={fmtNum(d.Exceptions_Failures)} hint={`of ${fmtNum(d.Exceptions_Total)} exception records · ${fmtNum(d.Exceptions_Structural)} structural (by design)`} />
           <Tile
