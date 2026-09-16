@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide
 import { useReconcileOutcomes, useTracking } from "@/shared/api/hooks/useTracking";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
 import { cn } from "@/shared/lib/cn";
 import type { TrackingResponse } from "@/shared/types/tracking";
 
@@ -17,7 +18,41 @@ import type { TrackingResponse } from "@/shared/types/tracking";
 // formatting, so what this page says and what the API says can't drift.
 
 type Status = "good" | "warning" | "critical";
-const WINDOWS = [7, 14, 30] as const;
+// Window presets. Everything is an inclusive plan-date range - the day the visits were
+// FOR - because "how did yesterday go" means the visits planned for yesterday, not the
+// plans generated yesterday. "Custom" exposes from/to inputs (server caps the span at
+// 90 days and rejects from > to with a 400 shown inline).
+type WindowKind = "yesterday" | "7" | "14" | "30" | "custom";
+const WINDOW_PRESETS: Array<{ kind: WindowKind; label: string }> = [
+  { kind: "yesterday", label: "Yesterday" },
+  { kind: "7", label: "7 days" },
+  { kind: "14", label: "14 days" },
+  { kind: "30", label: "30 days" },
+  { kind: "custom", label: "Custom" },
+];
+
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function presetRange(kind: WindowKind): { from: string; to: string } {
+  switch (kind) {
+    case "yesterday":
+      return { from: isoDaysAgo(1), to: isoDaysAgo(1) };
+    case "custom":
+      return { from: isoDaysAgo(6), to: isoDaysAgo(0) };
+    default:
+      return { from: isoDaysAgo(Number(kind) - 1), to: isoDaysAgo(0) };
+  }
+}
+
+function fmtRange(from: string, to: string): string {
+  const f = new Date(from + "T00:00:00").toLocaleDateString();
+  const t = new Date(to + "T00:00:00").toLocaleDateString();
+  return from === to ? f : `${f} – ${t}`;
+}
 
 const STATUS_VARIANT: Record<Status, "default" | "warning" | "destructive"> = {
   good: "default",
@@ -154,8 +189,10 @@ function pctStatus(pct: number | null, warnAbove: number, critAbove?: number): S
 
 // --- the view -----------------------------------------------------------------------
 export function TrackingView() {
-  const [days, setDays] = useState<(typeof WINDOWS)[number]>(7);
-  const { data, isLoading, isError, error, refetch, isFetching } = useTracking(days);
+  const [kind, setKind] = useState<WindowKind>("7");
+  const [custom, setCustom] = useState(() => presetRange("custom"));
+  const { from, to } = kind === "custom" ? custom : presetRange(kind);
+  const { data, isLoading, isError, error, refetch, isFetching } = useTracking(from, to);
 
   return (
     <div className="space-y-6">
@@ -166,14 +203,21 @@ export function TrackingView() {
             What the planning system is producing, and whether it changes what SEs collect and sell.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md border bg-background p-1" title="Plans generated in the last N days">
-            {WINDOWS.map((w) => (
-              <Button key={w} size="sm" variant={days === w ? "default" : "ghost"} className="h-7 px-2" onClick={() => setDays(w)}>
-                {w} days
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-md border bg-background p-1" title="Plans dated within this range">
+            {WINDOW_PRESETS.map((w) => (
+              <Button key={w.kind} size="sm" variant={kind === w.kind ? "default" : "ghost"} className="h-7 px-2" onClick={() => setKind(w.kind)}>
+                {w.label}
               </Button>
             ))}
           </div>
+          {kind === "custom" && (
+            <div className="flex items-center gap-1">
+              <Input type="date" className="h-8 w-36" value={custom.from} max={custom.to} aria-label="From date" onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input type="date" className="h-8 w-36" value={custom.to} min={custom.from} aria-label="To date" onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+            </div>
+          )}
           <Button size="sm" variant="outline" className="h-9" onClick={() => refetch()} disabled={isFetching} title="Recompute now">
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </Button>
@@ -182,7 +226,7 @@ export function TrackingView() {
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Computing metrics for the last {days} days...
+          <Loader2 className="h-4 w-4 animate-spin" /> Computing metrics for {fmtRange(from, to)}...
         </div>
       )}
       {isError && (
@@ -250,7 +294,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
   return (
     <div className="space-y-8">
       <div className="text-xs text-muted-foreground">
-        {win.Plan_Runs.toLocaleString("en-IN")} plan runs generated in the last {win.Days} days · computed {fmtWhen(data.Generated_At)}
+        {win.Plan_Runs.toLocaleString("en-IN")} plan runs dated {fmtRange(win.From, win.To)} ({win.Days} day{win.Days === 1 ? "" : "s"}) · computed {fmtWhen(data.Generated_At)}
       </div>
 
       <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Counted per planned visit (one SE, one DC, one day) - a regenerated plan doesn't count twice. Only reconciliation writes these; everything else on this page is upstream of it.">

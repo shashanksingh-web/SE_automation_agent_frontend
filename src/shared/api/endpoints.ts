@@ -342,7 +342,9 @@ export const adminApi = {
 // Tracking dashboard (added 2026-09-16, planning/tracking.py) - one read-only
 // aggregation over what the pipeline already persists, windowed by generation time.
 export const trackingApi = {
-  get: (days: number) => apiGet<TrackingResponse>(`/admin/tracking/?days=${days}`),
+  // Inclusive plan-date range, at most 90 days (planning/tracking.py resolve_window).
+  get: (from: string, to: string) =>
+    apiGet<TrackingResponse>(`/admin/tracking/?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   // Outcome reconciliation for every past plan_date still UNKNOWN (planning/
   // reconciliation.py). ~15s network-wide for a week of backlog; idempotent.
   reconcile: () => apiPost<ReconcileResponse>("/admin/reconcile/", {}),
