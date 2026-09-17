@@ -437,20 +437,38 @@ function PlanCard({
           <Stat
             label="Value captured"
             value={plan.expected_value_captured != null ? currencyFormatter.format(plan.expected_value_captured) : "-"}
+            hint={
+              plan.expected_value_captured == null
+                ? "No pending payment or last-order figure on file for these stops"
+                : plan.expected_value_dc_count < plan.stop_count
+                  ? `Pending payments + last order value at ${plan.expected_value_dc_count} of ${plan.stop_count} stops (the rest have no figure on file)`
+                  : "Pending payments + last order value, added up across this route's stops"
+            }
             title={
               plan.manually_edited
                 ? "Reflects the algorithm's ORIGINAL stop set, not this route's current (manually edited) one - RouteStop doesn't persist enough per-stop data to recompute it after an edit."
-                : plan.expected_value_dc_count < plan.stop_count
-                  ? `Only ${plan.expected_value_dc_count} of ${plan.stop_count} stops had a real Present_Outstanding/Last_Order_Value figure on file - the rest contributed Rs.0, not fabricated.`
-                  : "Sum of Present_Outstanding + Last_Order_Value across this route's stops - real Rupees, not the (currently unavailable) AI Sales Forecast."
+                : "The money this route can bring in today: each stop's present outstanding (collectable now) plus its last order value (what a sale visit typically realises again), summed - real figures from the DC's own records, never estimated. Stops with neither on file contribute nothing."
             }
           />
           <Stat
             label="Value / km"
             value={plan.value_per_km != null ? currencyFormatter.format(plan.value_per_km) : "-"}
-            title="Value captured divided by total distance - compares routes of different lengths on Rupees realized per km driven."
+            hint={
+              plan.value_per_km == null
+                ? "Needs a value figure and a route distance"
+                : `₹ per km driven: value captured ÷ ${plan.total_distance_km} km`
+            }
+            title="Value captured divided by the route's total distance - how much money each kilometre driven brings in, so a short route and a long one can be compared fairly. A longer route can capture more in total yet be worse per km."
           />
         </div>
+        {/* Written out once under the tiles too - the tooltips above never show on a
+            phone, which is where an SE reads this (added 2026-09-17, explicit user
+            request: "add the definition of Value/km and value capture"). */}
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Value captured</span> = pending payments + last order value at the stops on this route
+          (the money the day can bring in). <span className="font-medium text-foreground">Value / km</span> = value captured ÷ distance
+          (how much each km driven is worth - use it to compare routes of different lengths).
+        </p>
         {plan.stops.length > 0 && (
           <p className="text-xs text-muted-foreground">
             Includes the return trip back to origin at day's end - not broken out as its own stop below, which is
@@ -523,11 +541,12 @@ function PlanCard({
   );
 }
 
-function Stat({ label, value, title }: { label: string; value: string | number; title?: string }) {
+function Stat({ label, value, title, hint }: { label: string; value: string | number; title?: string; hint?: string }) {
   return (
     <div className="rounded-md border px-2 py-1.5" title={title}>
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="text-sm font-medium">{value}</div>
+      {hint && <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{hint}</div>}
     </div>
   );
 }
