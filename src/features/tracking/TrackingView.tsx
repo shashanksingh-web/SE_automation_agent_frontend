@@ -11,8 +11,10 @@ import { cn } from "@/shared/lib/cn";
 import type { TrackingResponse, TrackingSERow } from "@/shared/types/tracking";
 
 // Tracking dashboard (added 2026-09-16, explicit user request: "according to this
-// whole project what we have to track" -> "design this dashboard in this"). Five
-// tiers, most important first - Outcomes, Adoption, Quality, Data health, Ops - each a
+// whole project what we have to track" -> "design this dashboard in this"). Three
+// tiers, most important first - Outcomes, Adoption, Quality (Data health and Ops were
+// tiers 4 and 5 until 2026-09-17, removed per direct instruction: this is the business
+// view of the system, not its operations console) - each a
 // KPI row of stat tiles plus, where a breakdown adds something, single-hue horizontal
 // bars with direct labels. One hero figure per view (the Outcomes headline), status
 // chips always icon + label (never color alone), and "never measured" stated outright
@@ -88,9 +90,6 @@ function fmtPct(n: number | null | undefined): string {
 }
 function fmtWhen(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString() : "never";
-}
-function isToday(iso: string | null | undefined): boolean {
-  return !!iso && new Date(iso).toDateString() === new Date().toDateString();
 }
 
 // --- building blocks --------------------------------------------------------------
@@ -393,7 +392,7 @@ function BySETable({ rows }: { rows: TrackingSERow[] }) {
 }
 
 function Tiers({ data }: { data: TrackingResponse }) {
-  const { Window: win, Outcomes: o, Adoption: a, Quality: q, Data_Health: d, Ops: ops } = data;
+  const { Window: win, Outcomes: o, Adoption: a, Quality: q } = data;
   const sel = win.Selection;
   const neverReconciled = o.Tasks_Reconciled === 0;
   const latency = q.Generation_Latency_Sec;
@@ -413,7 +412,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
             {sel.Unmatched_ABMs.length > 0 && (
               <StatusChip status="warning" label={`No SEs on file for ABM ${sel.Unmatched_ABMs.join(", ")}`} />
             )}
-            <span>Outcomes and Adoption below are for this selection; the other tiers stay network-wide.</span>
+            <span>Outcomes and Adoption below are for this selection; Quality stays network-wide.</span>
           </div>
         )}
       </div>
@@ -511,52 +510,6 @@ function Tiers({ data }: { data: TrackingResponse }) {
         </div>
       </Section>
 
-      <Section n={4} title="Data health" networkWide={!!sel} blurb="Is the data feeding all of the above intact. Only real failures count here - a DC excluded by policy is logged by design, not a problem.">
-        <Grid>
-          <Tile
-            label="Runs hit by a live-pull failure"
-            value={fmtPct(d.Runs_With_A_Failure_Pct)}
-            hint={`${d.Runs_With_A_Failure} of ${win.Plan_Runs} runs · last failure ${fmtWhen(d.Last_Failure_At)}`}
-            status={{ status: pctStatus(d.Runs_With_A_Failure_Pct, 10, 30), label: (d.Runs_With_A_Failure_Pct ?? 0) > 10 ? "Degraded" : "Healthy" }}
-          />
-          <Tile label="Real failures" value={fmtNum(d.Exceptions_Failures)} hint={`of ${fmtNum(d.Exceptions_Total)} exception records · ${fmtNum(d.Exceptions_Structural)} structural (by design)`} />
-          <Tile
-            label="Normalization last run"
-            value={isToday(d.Normalization_Last_Run_At) ? "Today" : d.Normalization_Last_Run_At ? new Date(d.Normalization_Last_Run_At).toLocaleDateString() : "—"}
-            hint={fmtWhen(d.Normalization_Last_Run_At)}
-            status={{ status: isToday(d.Normalization_Last_Run_At) ? "good" : "warning", label: isToday(d.Normalization_Last_Run_At) ? "Fresh" : "Stale" }}
-          />
-          <Tile
-            label="DC master with coordinates"
-            value={fmtPct(d.DC_Master_Geo_Coverage_Pct)}
-            hint={`${fmtNum(d.DC_Master_Rows)} DCs in the static master; live geo covers the rest · ${d.Scheduled_Scopes} scheduled scopes`}
-            status={{ status: (d.DC_Master_Geo_Coverage_Pct ?? 0) < 70 ? "warning" : "good", label: (d.DC_Master_Geo_Coverage_Pct ?? 0) < 70 ? "Partial" : "Healthy" }}
-          />
-        </Grid>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Breakdown title="Live-pull failures by source" data={d.Live_Pull_Failures_By_Source} empty="No live-pull failures in this window" />
-          <Breakdown title="Structural exceptions (expected, by design)" data={d.Top_Structural_Codes} />
-        </div>
-      </Section>
-
-      <Section n={5} title="Ops" networkWide={!!sel} blurb="The plumbing underneath.">
-        <Grid>
-          <Tile
-            label="Alert routing"
-            value={ops.Alert_Webhook_Configured ? "Configured" : "Not configured"}
-            hint="ALERT_WEBHOOK_URL - where run-health alerts are sent"
-            status={ops.Alert_Webhook_Configured ? { status: "good", label: "Alerts delivered" } : { status: "critical", label: "Alerts go nowhere" }}
-          />
-          <Tile
-            label="Redshift"
-            value={ops.Redshift_Reachable === null ? "Not configured" : ops.Redshift_Reachable ? "Reachable" : "Unreachable"}
-            hint="live data source for every generation"
-            status={ops.Redshift_Reachable === false ? { status: "critical", label: "Generation blocked" } : ops.Redshift_Reachable ? { status: "good", label: "Connected" } : { status: "warning", label: "No host set" }}
-          />
-          <Tile label="Database" value={`${ops.DB_Journal_Mode.toUpperCase()} · ${ops.DB_Transaction_Mode ?? "—"}`} hint={`busy timeout ${ops.DB_Busy_Timeout_Sec ?? "—"}s`} />
-          <Tile label="Weekly off day" value={ops.Plan_Generation_Weekly_Off_Day ?? "None"} hint="no plans generated on this day" />
-        </Grid>
-      </Section>
     </div>
   );
 }

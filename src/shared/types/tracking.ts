@@ -1,5 +1,7 @@
-// GET /api/planning/admin/tracking/?days=N (planning/tracking.py, added 2026-09-16) -
-// the Tracking dashboard's numbers, five tiers most-important-first. Every metric is
+// GET /api/planning/admin/tracking/ (planning/tracking.py, added 2026-09-16) - the
+// Tracking dashboard's numbers, three tiers most-important-first: Outcomes, Adoption,
+// Quality. (Data health and Ops were tiers 4 and 5 until 2026-09-17 - removed per
+// direct instruction; this is the business view of the system, not its ops console.) Every metric is
 // computed at request time from what the pipeline already persists; a metric whose
 // underlying data has never been produced is null (never a fabricated 0) alongside
 // the count of what IS there, so the UI can say "never measured" honestly - e.g.
@@ -118,38 +120,6 @@ export interface TrackingQuality {
   Generation_Latency_Sec: { Runs: number; Avg: number | null; P90: number | null; Max: number | null };
 }
 
-// Tier 4 - is the data feeding all of the above healthy. "Failures" are reason codes
-// matching Failed/Error/Crash/Timeout; everything else is structural (a policy that
-// applied and was logged by design), which is why the raw exception count is useless
-// as an alarm on its own.
-export interface TrackingDataHealth {
-  Exceptions_Total: number;
-  Exceptions_Failures: number;
-  Exceptions_Structural: number;
-  Failure_Codes: Record<string, number>;
-  Top_Structural_Codes: Record<string, number>;
-  Live_Pull_Failures_By_Source: Record<string, number>;
-  Runs_With_A_Failure: number;
-  Runs_With_A_Failure_Pct: number | null;
-  // Newest failure in the window - tells an incident that's over from one still running.
-  Last_Failure_At: string | null;
-  Normalization_Last_Run_At: string | null;
-  DC_Master_Rows: number | null;
-  DC_Master_Geo_Coverage_Pct: number | null;
-  Scheduled_Scopes: number;
-}
-
-// Tier 5 - the plumbing.
-export interface TrackingOps {
-  Alert_Webhook_Configured: boolean;
-  // null when REDSHIFT_HOST isn't configured at all (nothing to probe).
-  Redshift_Reachable: boolean | null;
-  DB_Journal_Mode: string;
-  DB_Busy_Timeout_Sec: number | null;
-  DB_Transaction_Mode: string | null;
-  Plan_Generation_Weekly_Off_Day: string | null;
-}
-
 export interface TrackingResponse {
   Window: TrackingWindow;
   Outcomes: TrackingOutcomes;
@@ -157,7 +127,5 @@ export interface TrackingResponse {
   // Only present (non-null) when an SE/ABM selection is active.
   By_SE: TrackingSERow[] | null;
   Quality: TrackingQuality;
-  Data_Health: TrackingDataHealth;
-  Ops: TrackingOps;
   Generated_At: string;
 }
