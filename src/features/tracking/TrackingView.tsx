@@ -347,8 +347,9 @@ function BySETable({ rows }: { rows: TrackingSERow[] }) {
           <TableRow>
             <TableHead>SE</TableHead>
             <TableHead className="text-right" title="Distinct planned visits in the window">Planned</TableHead>
-            <TableHead className="text-right" title="Visits with a recorded outcome">Reconciled</TableHead>
-            <TableHead className="text-right" title="Completed or ordered-without-visit, of reconciled">Executed</TableHead>
+            <TableHead className="text-right" title="Planned visits whose day has passed">Due</TableHead>
+            <TableHead className="text-right" title="Due visits with a recorded outcome">Reconciled</TableHead>
+            <TableHead className="text-right" title="Completed or ordered-without-visit, of due">Executed</TableHead>
             <TableHead className="text-right" title="Paid within 2 days of the visit">Collected</TableHead>
             <TableHead className="text-right" title="Ordered within 2 days of the visit">Ordered</TableHead>
             <TableHead className="text-right" title="Days the SE had a plan in their own view">SE-days</TableHead>
@@ -368,10 +369,11 @@ function BySETable({ rows }: { rows: TrackingSERow[] }) {
                   )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{r.Planned.toLocaleString("en-IN")}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.Due.toLocaleString("en-IN")}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.Reconciled.toLocaleString("en-IN")}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {exec === null ? "—" : (
-                    <span className="inline-flex items-center justify-end gap-1.5">
+                    <span className="inline-flex items-center justify-end gap-1.5" title={`${r.Executed} of ${r.Due} due`}>
                       {fmtPct(exec)}
                       <span className={cn("inline-block h-2 w-2 rounded-full", exec >= 70 ? "bg-primary" : exec >= 50 ? "bg-warning" : "bg-destructive")} aria-hidden="true" />
                     </span>
@@ -417,14 +419,14 @@ function Tiers({ data }: { data: TrackingResponse }) {
         )}
       </div>
 
-      <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Counted per planned visit (one SE, one DC, one day) - a regenerated plan doesn't count twice. Only reconciliation writes these; everything else on this page is upstream of it.">
+      <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Counted per planned visit (one SE, one DC, one day) - a regenerated plan doesn't count twice. Execution = (completed + ordered without a visit) ÷ planned visits whose day has passed; a past visit nobody reconciled counts as not executed. Only reconciliation writes these.">
         <ReconcileRow outcomes={o} />
         <Grid>
           <Tile
             hero
             label={neverReconciled ? "Visits reconciled" : "Visit execution rate"}
-            value={neverReconciled ? `${o.Tasks_Reconciled} / ${fmtNum(o.Tasks_Planned)}` : fmtPct(o.Visit_Execution_Rate_Pct)}
-            hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Reconciled)} reconciled visits`}
+            value={neverReconciled ? `${o.Tasks_Reconciled} / ${fmtNum(o.Tasks_Due)}` : fmtPct(o.Visit_Execution_Rate_Pct)}
+            hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Due)} planned visits due${o.Tasks_Not_Yet_Due > 0 ? ` · ${fmtNum(o.Tasks_Not_Yet_Due)} more planned for today or later` : ""}`}
             status={neverReconciled ? { status: "critical", label: "Never measured" } : executionStatus(o.Visit_Execution_Rate_Pct)}
           />
           <Tile label="Collection realised" value={fmtINR(o.Collection_Realised)} hint={`paid within 2 days of the visit · ${fmtINR(o.Overdue_Pitched)} overdue pitched`} />
@@ -436,7 +438,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
             hint={`SE–DC pairs missed ${o.Escalation_Threshold_Misses}+ days running (all time)`}
             status={{ status: o.Chronic_Non_Execution_Pairs > 0 ? "warning" : "good", label: o.Chronic_Non_Execution_Pairs > 0 ? "Escalated" : "None" }}
           />
-          <Tile label="Planned visits" value={fmtNum(o.Tasks_Planned)} hint={`${fmtPct(o.Reconciliation_Rate_Pct)} reconciled · ${fmtNum(o.Task_Rows)} task rows incl. regenerations`} />
+          <Tile label="Planned visits" value={fmtNum(o.Tasks_Planned)} hint={`${fmtNum(o.Tasks_Due)} due, ${fmtPct(o.Reconciliation_Rate_Pct)} of them reconciled · ${fmtNum(o.Task_Rows)} task rows incl. regenerations`} />
         </Grid>
         {data.By_SE && <BySETable rows={data.By_SE} />}
       </Section>

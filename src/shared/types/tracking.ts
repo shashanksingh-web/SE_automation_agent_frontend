@@ -31,7 +31,10 @@ export interface TrackingWindow {
 export interface TrackingSERow {
   SE: string;
   Planned: number;
+  Due: number;
   Reconciled: number;
+  Executed: number;
+  // Executed / Due.
   Execution_Rate_Pct: number | null;
   Collection: number;
   Sales: number;
@@ -48,12 +51,20 @@ export interface TrackingOutcomes {
   // Planned visits = distinct (SE, DC, plan_date); Task_Rows is the raw DailyTask count,
   // which is far larger because every view load regenerates the scope's plan.
   Tasks_Planned: number;
+  // Planned visits whose plan date has passed - the execution denominator. A visit
+  // planned for today or later can't have an outcome yet (reconciliation only runs
+  // for past dates), so it's counted in Tasks_Not_Yet_Due instead of as missed.
+  Tasks_Due: number;
+  Tasks_Not_Yet_Due: number;
   Task_Rows: number;
   Tasks_Reconciled: number;
+  // Of due visits.
   Reconciliation_Rate_Pct: number | null;
   // All-time, not windowed - "has this ever run" is the question it answers.
   Reconciliation_Last_Run_At: string | null;
+  // (COMPLETED + PARTIAL) / Tasks_Due - an unreconciled past visit counts as not executed.
   Visit_Execution_Rate_Pct: number | null;
+  Visits_Executed: number;
   Outcome_Status_Breakdown: Record<string, number>;
   Overdue_Pitched: number | null;
   Collection_Realised: number | null;
