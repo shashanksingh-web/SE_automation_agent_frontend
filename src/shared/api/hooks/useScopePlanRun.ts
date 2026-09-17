@@ -3,7 +3,7 @@ import { ApiError } from "@/shared/api/client";
 import { scopeApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
 import { normalizePlanRun, mergeNormalizedPlanRuns } from "@/shared/api/normalize";
-import type { DateSelection, ScopePathSegment } from "@/shared/types/scope";
+import type { DateSelection, RoutingPlanChoice, ScopePathSegment } from "@/shared/types/scope";
 import { dateSelectionToQueryParam } from "@/shared/types/scope";
 import type { PlanRunResponse } from "@/shared/types/planRun";
 import { useMemo } from "react";
@@ -13,15 +13,17 @@ import { useMemo } from "react";
 // and each view load, date switch or window focus rebuilt the plan from scratch;
 // generation is now only the explicit Create / Refresh (useTuffFanOutCreate) or a
 // backend run, after which useTuff's onSuccess invalidates ["scope"] and this re-reads.
-// That also retires the routing-plan gating this hook used to carry: reading can't
-// generate with the wrong plan, and Plan A/B/C only applies when generating.
+// routingPlan here is a READ preference (2026-09-17): the server serves the newest
+// finished run generated under that family when one exists, else the newest of any -
+// so an SE whose admin-set plan is C sees their Plan C run even after a Plan A
+// regeneration. Reading can never generate with the wrong plan.
 //
 // "Nothing generated yet" is a 404 (code NO_PLAN) and is data, not an error: the query
 // resolves to null so the view can render an empty state with the Create / Refresh
 // button instead of a red failure banner.
-async function readScope(segment: ScopePathSegment, scopeValue: string, date: DateSelection): Promise<PlanRunResponse | null> {
+async function readScope(segment: ScopePathSegment, scopeValue: string, date: DateSelection, routingPlan: RoutingPlanChoice): Promise<PlanRunResponse | null> {
   try {
-    return await scopeApi.get(segment, scopeValue, { date: dateSelectionToQueryParam(date) });
+    return await scopeApi.get(segment, scopeValue, { date: dateSelectionToQueryParam(date), routing_plan: routingPlan });
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
@@ -30,10 +32,10 @@ async function readScope(segment: ScopePathSegment, scopeValue: string, date: Da
 
 const selectNormalized = (raw: PlanRunResponse | null) => (raw ? normalizePlanRun(raw) : null);
 
-export function useScopePlanRun(segment: ScopePathSegment, scopeValue: string | undefined, date: DateSelection) {
+export function useScopePlanRun(segment: ScopePathSegment, scopeValue: string | undefined, date: DateSelection, routingPlan: RoutingPlanChoice) {
   return useQuery({
-    queryKey: queryKeys.scope(segment, scopeValue ?? "", date),
-    queryFn: () => readScope(segment, scopeValue!, date),
+    queryKey: queryKeys.scope(segment, scopeValue ?? "", date, routingPlan),
+    queryFn: () => readScope(segment, scopeValue!, date, routingPlan),
     enabled: !!scopeValue,
     select: selectNormalized,
   });
@@ -41,11 +43,11 @@ export function useScopePlanRun(segment: ScopePathSegment, scopeValue: string | 
 
 // Multi-select fan-out (§7): one GET per selected scope value in parallel, merged
 // client-side via the indexed normalization pattern (§17), not array concat.
-export function useMultiScopePlanRuns(segment: ScopePathSegment, scopeValues: string[], date: DateSelection) {
+export function useMultiScopePlanRuns(segment: ScopePathSegment, scopeValues: string[], date: DateSelection, routingPlan: RoutingPlanChoice) {
   const results = useQueries({
     queries: scopeValues.map((scopeValue) => ({
-      queryKey: queryKeys.scope(segment, scopeValue, date),
-      queryFn: () => readScope(segment, scopeValue, date),
+      queryKey: queryKeys.scope(segment, scopeValue, date, routingPlan),
+      queryFn: () => readScope(segment, scopeValue, date, routingPlan),
       select: selectNormalized,
     })),
   });

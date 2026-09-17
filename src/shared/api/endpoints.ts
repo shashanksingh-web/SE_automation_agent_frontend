@@ -98,10 +98,18 @@ export const scopeApi = {
   // slice of whichever finished run contains them - their SE-scope run or an
   // ABM/STATE run such as "Generate for all states" (see Served_From). 404 with code
   // NO_PLAN when nothing has been generated for that date yet.
-  get: (segment: ScopePathSegment, scopeValue: string, params?: { date?: string }) =>
-    apiGet<PlanRunResponse>(
-      `/${segment}/${encodeURIComponent(scopeValue)}/${params?.date ? `?date=${encodeURIComponent(params.date)}` : ""}`,
-    ),
+  // routing_plan (A/B/C) is a READ preference, not a generation setting: the server
+  // returns the newest finished run whose routes were generated under that family,
+  // falling back to the newest of any family - Routing_Plan on the response says which
+  // it actually served (added 2026-09-17 after "why plan c is not working": a later
+  // Plan A regeneration was hiding the SE's Plan C runs for the same day).
+  get: (segment: ScopePathSegment, scopeValue: string, params?: { date?: string; routing_plan?: RoutingPlanChoice }) => {
+    const q = new URLSearchParams();
+    if (params?.date) q.set("date", params.date);
+    if (params?.routing_plan) q.set("routing_plan", params.routing_plan);
+    const qs = q.toString();
+    return apiGet<PlanRunResponse>(`/${segment}/${encodeURIComponent(scopeValue)}/${qs ? `?${qs}` : ""}`);
+  },
 };
 
 // ---------------------------------------------------------------------------

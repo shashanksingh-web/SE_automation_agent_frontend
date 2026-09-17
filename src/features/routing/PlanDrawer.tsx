@@ -33,6 +33,12 @@ import { ApiError } from "@/shared/api/client";
 interface PlanDrawerProps {
   se: string | null;
   planDate: string;
+  // The PlanRun whose routes to show and act on - the one the task table is showing
+  // (added 2026-09-17). Without it the routes endpoint resolves "newest run with
+  // routes for this SE/date" on its own, which after a later Plan A regeneration meant
+  // a Plan C task list above a Plan A route drawer, and Accept/Reject/add-stop landing
+  // on a different run than the one on screen.
+  planRun?: string;
   // DC_ID -> DC_Name, built by the caller from the SE's own task list (RouteStop only
   // carries dc_id - no name). Only covers today's selected/visible tasks - a dropped
   // candidate or a non-selected route alternative's stop won't be in here, which is why
@@ -120,14 +126,14 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10);
 // §10 - one card per plan, feasible first, is_default_selected pre-highlighted.
 // select fires the /select/<plan_type>/ call. 422 (no route data / no DCs) is
 // an empty state, not an error.
-export function PlanDrawer({ se, planDate, dcNames = {}, exceptions = [], onClose }: PlanDrawerProps) {
+export function PlanDrawer({ se, planDate, planRun, dcNames = {}, exceptions = [], onClose }: PlanDrawerProps) {
   const { user } = useAuth();
-  const { data, isLoading, isError, error } = useRoutes(se ?? undefined, planDate);
-  const selectMutation = useSelectRoutePlan(se ?? "", planDate);
-  const acceptMutation = useAcceptRoutePlan(se ?? "", planDate, undefined, user?.email);
-  const rejectMutation = useRejectRoutePlan(se ?? "", planDate, undefined, user?.email);
-  const addStopMutation = useAddRouteStop(se ?? "", planDate);
-  const removeStopMutation = useRemoveRouteStop(se ?? "", planDate);
+  const { data, isLoading, isError, error } = useRoutes(se ?? undefined, planDate, planRun);
+  const selectMutation = useSelectRoutePlan(se ?? "", planDate, planRun);
+  const acceptMutation = useAcceptRoutePlan(se ?? "", planDate, planRun, user?.email);
+  const rejectMutation = useRejectRoutePlan(se ?? "", planDate, planRun, user?.email);
+  const addStopMutation = useAddRouteStop(se ?? "", planDate, planRun);
+  const removeStopMutation = useRemoveRouteStop(se ?? "", planDate, planRun);
 
   // Pitching Agent + DC Card status from the last select/accept/add-stop/remove-stop
   // call (added 2026-09-15, explicit follow-up request - "provide the status like

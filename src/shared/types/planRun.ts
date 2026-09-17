@@ -1,3 +1,4 @@
+import type { RoutingPlanChoice } from "@/shared/types/scope";
 // DC Club Scheme standing (planning/views.py: _serialize_task's Club_Detail, sourced
 // from se_daily_plan_agent.normalize_dc_club()). Club_Tier/Zone/TOD_Percent/Reward
 // describe CURRENT standing - all null if not yet tiered (Is_Club_Enrolled can still be
@@ -278,6 +279,11 @@ export interface PlanRunResponse {
   // counts and task list are the SE's, Scope_Type/Scope_Value are the run's. null
   // otherwise. Added 2026-09-17 with the read-only scope GET.
   Served_From: { Scope_Type: string; Scope_Value: string; Filtered_To_SE: string } | null;
+  // Which Routing Agent family (A/B/C) the served run's routes were generated under;
+  // null when the run has no routes. Only on the read (GET) response - lets the view
+  // say "Plan A shown because no Plan C run exists yet" instead of showing Plan A
+  // routes under a Plan C badge. Added 2026-09-17.
+  Routing_Plan?: RoutingPlanChoice | null;
   SE_Count: number;
   DC_Count: number;
   Task_Count: number;

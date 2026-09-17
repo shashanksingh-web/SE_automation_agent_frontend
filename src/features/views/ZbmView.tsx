@@ -26,7 +26,7 @@ export function ZbmView() {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
+  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; planRunId: string } | null>(
     null,
   );
 
@@ -46,6 +46,7 @@ export function ZbmView() {
     "state",
     coveredStates,
     dateSelection,
+    routingPlan,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -112,13 +113,14 @@ export function ZbmView() {
                   key={seId}
                   seId={seId}
                   seName={merged.seById[seId].SE_Name}
+                  planRunId={merged.seById[seId].planRunId}
                   tasks={merged.seById[seId].taskOrder.map(
                     (dcId) => merged.seById[seId].taskIdsByDcId[dcId],
                   )}
                   exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+                  onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
                 />
               ))}
               {merged.seOrder.length === 0 && (
@@ -144,6 +146,7 @@ export function ZbmView() {
       <PlanDrawer
         se={routesTarget?.seId ?? null}
         planDate={planDate}
+        planRun={routesTarget?.planRunId}
         dcNames={routesTarget?.dcNames}
         exceptions={merged.exceptions}
         onClose={() => setRoutesTarget(null)}

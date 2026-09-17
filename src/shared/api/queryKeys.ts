@@ -20,8 +20,8 @@ export const queryKeys = {
   },
   // Read-only since 2026-09-17: the key is the scope and date, nothing about how the
   // plan gets generated (Plan A/B/C only applies to Create / Refresh).
-  scope: (segment: string, scopeValue: string, date: DateSelection) =>
-    ["scope", segment, scopeValue, dateSelectionCacheKey(date)] as const,
+  scope: (segment: string, scopeValue: string, date: DateSelection, routingPlan: RoutingPlanChoice) =>
+    ["scope", segment, scopeValue, dateSelectionCacheKey(date), routingPlan] as const,
   tuff: (
     scopeType: string,
     scopeValue: string,

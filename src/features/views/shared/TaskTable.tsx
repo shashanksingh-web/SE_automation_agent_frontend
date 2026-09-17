@@ -13,6 +13,9 @@ import { rememberDCName, getCachedDCName } from "@/shared/lib/dcNameCache";
 interface TaskTableProps {
   seId: string;
   seName: string;
+  // The PlanRun these tasks came from - handed to the Route plans drawer so it shows
+  // and acts on the same run the table shows.
+  planRunId: string;
   tasks: Task[];
   // The PlanRun's full Exceptions_Report (added 2026-09-02) - filtered below per-DC to
   // surface DC_Datamart_Inactive_Outstanding_Unavailable (se_daily_plan_agent.py, added
@@ -24,7 +27,7 @@ interface TaskTableProps {
   exceptions?: Exception[];
   onOpenPitch: (task: Task) => void;
   onOpenDCCard: (task: Task) => void;
-  onOpenRoutes: (seId: string, dcNames: Record<string, string>) => void;
+  onOpenRoutes: (seId: string, dcNames: Record<string, string>, planRunId: string) => void;
 }
 
 const INACTIVE_OUTSTANDING_REASON_CODE = "DC_Datamart_Inactive_Outstanding_Unavailable";
@@ -62,7 +65,7 @@ const BO_GRADE_VARIANTS: Record<string, "default" | "warning" | "destructive" | 
 // Daily task table (Plans[].Tasks[], §7). Actuals are empty for future/unreconciled
 // dates, so the planned-vs-actual block renders as an expandable second row per
 // task (the OutcomePanel concern, §7/§18) instead of always-visible columns.
-export function TaskTable({ seId, seName, tasks, exceptions = [], onOpenPitch, onOpenDCCard, onOpenRoutes }: TaskTableProps) {
+export function TaskTable({ seId, seName, planRunId, tasks, exceptions = [], onOpenPitch, onOpenDCCard, onOpenRoutes }: TaskTableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const inactiveOutstandingDcIds = new Set(
@@ -112,6 +115,7 @@ export function TaskTable({ seId, seName, tasks, exceptions = [], onOpenPitch, o
               Object.fromEntries(
                 tasks.map((t) => [t.DC_ID, t.DC_Name ?? getCachedDCName(t.DC_ID) ?? t.DC_ID]),
               ),
+              planRunId,
             )
           }
           className="gap-1.5"
