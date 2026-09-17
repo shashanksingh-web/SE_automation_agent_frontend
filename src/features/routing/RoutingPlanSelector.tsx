@@ -64,8 +64,8 @@ export function RoutingPlanSelector() {
   // value nobody ever explicitly sets stays stuck at appStore's initial default (Plan
   // A) forever, silently ignoring whatever the admin actually configured. Waits for the
   // config to resolve so it never pushes the loading-state fallback ("A") as if it were
-  // the admin's real choice - the scope queries are gated on the same signal
-  // (useRoutingPlanSettled), so nothing generates until this has run with the real value.
+  // the admin's real choice. (Since 2026-09-17 a view load only reads the latest plan -
+  // this value now matters only when the SE presses Create / Refresh.)
   useEffect(() => {
     if (user?.role === "SE" && seRoutingPlanResolved && routingPlan !== seRoutingPlan) {
       setRoutingPlan(seRoutingPlan);

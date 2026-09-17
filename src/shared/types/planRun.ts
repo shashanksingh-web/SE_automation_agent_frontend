@@ -273,6 +273,11 @@ export interface PlanRunResponse {
   Plan_Date: string;
   Run_Timestamp: string;
   Metabase_Configured: boolean;
+  // Set when an SE's view is served as their slice of a broader run (ABM/STATE-scope,
+  // e.g. "Generate for all states") rather than an SE-scope run of their own - the
+  // counts and task list are the SE's, Scope_Type/Scope_Value are the run's. null
+  // otherwise. Added 2026-09-17 with the read-only scope GET.
+  Served_From: { Scope_Type: string; Scope_Value: string; Filtered_To_SE: string } | null;
   SE_Count: number;
   DC_Count: number;
   Task_Count: number;

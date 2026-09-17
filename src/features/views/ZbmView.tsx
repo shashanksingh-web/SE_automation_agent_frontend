@@ -42,12 +42,10 @@ export function ZbmView() {
     return [...states];
   }, [zbmsQuery.data, zbmValues]);
 
-  const { merged, perScope, isLoading, isError, errors } = useMultiScopePlanRuns(
+  const { merged, perScope, isLoading, isError, errors, allEmpty } = useMultiScopePlanRuns(
     "state",
     coveredStates,
     dateSelection,
-    routingPlan,
-    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -95,6 +93,12 @@ export function ZbmView() {
               Panel's Scheduling weekly-off-day gate) carries a precise reason worth
               showing verbatim rather than a generic retry prompt. */}
           {errors[0]?.message || "Failed to load one or more states. Retryable - try Create/Refresh again."}
+        </div>
+      )}
+
+      {allEmpty && !isLoading && !isError && (
+        <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+          No plan has been generated for these states on this date yet. Press <span className="font-medium text-foreground">Create / Refresh</span> to generate one.
         </div>
       )}
 

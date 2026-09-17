@@ -88,20 +88,19 @@ export const directoryApi = {
 // (SE email, ABM/RBM employee code, Node/Block/District/State name).
 // ---------------------------------------------------------------------------
 export const scopeApi = {
-  // Moved from apiGet to apiPost 2026-09-16 (architecture audit, round 2) -- this
-  // endpoint creates a new PlanRun + DailyTask rows + triggers live Pitching/DC Card
-  // generation on every call, so it was never actually safe/idempotent despite being a
-  // GET. Safe for React Query's queryFn here (see useScopePlanRun.ts's own comment) --
-  // queryFn is transport-agnostic, so this doesn't change caching/dedup behavior, only
-  // the wire method.
-  get: (
-    segment: ScopePathSegment,
-    scopeValue: string,
-    params?: { date?: string; routing_plan?: RoutingPlanChoice; rotation?: boolean },
-  ) =>
-    apiPost<PlanRunResponse>(
-      `/${segment}/${encodeURIComponent(scopeValue)}/`,
-      params ?? {},
+  // READ the latest generated plan for a scope and date (GET, added 2026-09-17,
+  // explicit user request: "if backend complete all process why its again run for
+  // frontend - only data will capture"). Until now this was a POST that generated a
+  // brand-new PlanRun on every view load - every Redshift pull, routing, LLM calls,
+  // pitching - which is where the "7x regenerations per SE-day" on the Tracking
+  // dashboard came from. Generation is now only ever the explicit Create / Refresh
+  // (normalizationApi.tuff) or a backend run. For an SE the server returns their own
+  // slice of whichever finished run contains them - their SE-scope run or an
+  // ABM/STATE run such as "Generate for all states" (see Served_From). 404 with code
+  // NO_PLAN when nothing has been generated for that date yet.
+  get: (segment: ScopePathSegment, scopeValue: string, params?: { date?: string }) =>
+    apiGet<PlanRunResponse>(
+      `/${segment}/${encodeURIComponent(scopeValue)}/${params?.date ? `?date=${encodeURIComponent(params.date)}` : ""}`,
     ),
 };
 

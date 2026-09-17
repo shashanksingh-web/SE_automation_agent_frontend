@@ -38,12 +38,10 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
     null,
   );
 
-  const { merged, perScope, isLoading, isError, errors } = useMultiScopePlanRuns(
+  const { merged, perScope, isLoading, isError, errors, allEmpty } = useMultiScopePlanRuns(
     pathSegment,
     scopeValues,
     dateSelection,
-    routingPlan,
-    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -86,6 +84,20 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
               verbatim rather than a generic "failed" message an admin would just retry
               pointlessly against an intentional policy block, not a transient error. */}
           {errors[0]?.message || "Failed to load one or more scopes. Retryable - try Create/Refresh again."}
+        </div>
+      )}
+
+      {/* Nothing generated yet for this scope/date - a view load only reads (2026-09-17),
+          so this is the one place generation is offered, explicitly. */}
+      {allEmpty && !isLoading && !isError && (
+        <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+          No plan has been generated for {planDate} yet. Press <span className="font-medium text-foreground">Create / Refresh</span> to generate one.
+        </div>
+      )}
+
+      {single?.data?.meta.Served_From && !isLoading && (
+        <div className="text-xs text-muted-foreground">
+          Showing this SE's slice of the {single.data.meta.Served_From.Scope_Type} plan for {single.data.meta.Served_From.Scope_Value}, generated {new Date(single.data.meta.Run_Timestamp).toLocaleString()}.
         </div>
       )}
 
