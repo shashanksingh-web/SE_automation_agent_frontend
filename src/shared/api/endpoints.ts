@@ -343,8 +343,14 @@ export const adminApi = {
 // aggregation over what the pipeline already persists, windowed by generation time.
 export const trackingApi = {
   // Inclusive plan-date range, at most 90 days (planning/tracking.py resolve_window).
-  get: (from: string, to: string) =>
-    apiGet<TrackingResponse>(`/admin/tracking/?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  // ses/abms (repeatable params) narrow Outcomes and Adoption to those SEs, an ABM
+  // expanding to the SEs under it; empty = network-wide.
+  get: (from: string, to: string, ses: string[] = [], abms: string[] = []) => {
+    const q = new URLSearchParams({ from, to });
+    ses.forEach((s) => q.append("se", s));
+    abms.forEach((a) => q.append("abm", a));
+    return apiGet<TrackingResponse>(`/admin/tracking/?${q.toString()}`);
+  },
   // Outcome reconciliation for every past plan_date still UNKNOWN (planning/
   // reconciliation.py). ~15s network-wide for a week of backlog; idempotent.
   reconcile: () => apiPost<ReconcileResponse>("/admin/reconcile/", {}),

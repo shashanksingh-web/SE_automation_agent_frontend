@@ -47,7 +47,8 @@ export const queryKeys = {
     ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all", planDate ?? "all", offset ?? 0] as const,
   run: (planRunId: string) => ["runs", "detail", planRunId] as const,
   adminConfig: () => ["admin-config"] as const,
-  tracking: (from: string, to: string) => ["admin-tracking", from, to] as const,
+  tracking: (from: string, to: string, ses: string[], abms: string[]) =>
+    ["admin-tracking", from, to, [...ses].sort().join(","), [...abms].sort().join(",")] as const,
   dcSelection: () => ["dc-selection"] as const,
   dcSelectionSearch: (q: string, filterMode: string, offset: number) =>
     ["dc-selection", "search", q, filterMode, offset] as const,

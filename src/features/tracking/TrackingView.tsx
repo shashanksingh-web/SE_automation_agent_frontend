@@ -1,11 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, X, XCircle } from "lucide-react";
+import { useAbms, useSEs } from "@/shared/api/hooks/useDirectory";
 import { useReconcileOutcomes, useTracking } from "@/shared/api/hooks/useTracking";
+import { MultiSelectPopover } from "@/shared/components/MultiSelectPopover";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/components/ui/table";
 import { cn } from "@/shared/lib/cn";
-import type { TrackingResponse } from "@/shared/types/tracking";
+import type { TrackingResponse, TrackingSERow } from "@/shared/types/tracking";
 
 // Tracking dashboard (added 2026-09-16, explicit user request: "according to this
 // whole project what we have to track" -> "design this dashboard in this"). Five
@@ -164,11 +167,18 @@ function Breakdown({ title, data, empty = "Nothing in this window" }: { title: s
   );
 }
 
-function Section({ n, title, blurb, children }: { n: number; title: string; blurb: string; children: ReactNode }) {
+function Section({ n, title, blurb, networkWide, children }: { n: number; title: string; blurb: string; networkWide?: boolean; children: ReactNode }) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-base font-semibold">{n}. {title}</h2>
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          {n}. {title}
+          {networkWide && (
+            <Badge variant="outline" className="font-normal" title="This tier describes the pipeline as a whole - the SE/ABM filter doesn't apply to it">
+              Network-wide
+            </Badge>
+          )}
+        </h2>
         <p className="text-sm text-muted-foreground">{blurb}</p>
       </div>
       {children}
@@ -181,6 +191,16 @@ const Grid = ({ children }: { children: ReactNode }) => (
 );
 
 // --- status rules (the thresholds are the dashboard's opinion, stated once here) -----
+// Visit execution: under half the planned visits happening is the headline problem;
+// 50-70% is still a lot of missed visits; 70%+ is healthy. Status and label come from
+// the same rule so the chip's colour and its words can't disagree.
+function executionStatus(rate: number | null): { status: Status; label: string } {
+  if (rate === null) return { status: "warning", label: "Not measured" };
+  if (rate < 50) return { status: "critical", label: "Most visits missed" };
+  if (rate < 70) return { status: "warning", label: "Many visits missed" };
+  return { status: "good", label: "Healthy" };
+}
+
 function pctStatus(pct: number | null, warnAbove: number, critAbove?: number): Status {
   if (pct === null) return "warning";
   if (critAbove !== undefined && pct > critAbove) return "critical";
@@ -191,8 +211,16 @@ function pctStatus(pct: number | null, warnAbove: number, critAbove?: number): S
 export function TrackingView() {
   const [kind, setKind] = useState<WindowKind>("7");
   const [custom, setCustom] = useState(() => presetRange("custom"));
+  // SE/ABM filter (added 2026-09-16, explicit user request: "add SE and ABM wise
+  // tracking ... selection must be multiple select"). Local to this view, not the
+  // global scope store - it's a lens on the dashboard, not a plan-generation scope.
+  const [ses, setSes] = useState<string[]>([]);
+  const [abms, setAbms] = useState<string[]>([]);
   const { from, to } = kind === "custom" ? custom : presetRange(kind);
-  const { data, isLoading, isError, error, refetch, isFetching } = useTracking(from, to);
+  const { data, isLoading, isError, error, refetch, isFetching } = useTracking(from, to, ses, abms);
+  const abmsQuery = useAbms();
+  const sesQuery = useSEs();
+  const filtered = ses.length > 0 || abms.length > 0;
 
   return (
     <div className="space-y-6">
@@ -222,6 +250,29 @@ export function TrackingView() {
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <MultiSelectPopover
+          options={(abmsQuery.data ?? []).map((a) => ({ value: a.code, label: a.name ?? a.code, sublabel: `${a.code} · ${a.dc_count} DCs` }))}
+          selected={abms}
+          onChange={setAbms}
+          placeholder="ABM(s)"
+          loading={abmsQuery.isLoading}
+        />
+        <MultiSelectPopover
+          options={(sesQuery.data ?? []).map((s) => ({ value: s.se_email, label: s.se_email, sublabel: s.emp_id_se ? `${s.emp_id_se} · ${s.dc_count} DCs` : `${s.dc_count} DCs` }))}
+          selected={ses}
+          onChange={setSes}
+          placeholder="SE(s)"
+          loading={sesQuery.isLoading}
+        />
+        {filtered && (
+          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => { setSes([]); setAbms([]); }}>
+            <X className="mr-1 h-3.5 w-3.5" /> Clear
+          </Button>
+        )}
+        {!filtered && <span className="text-xs text-muted-foreground">Network-wide - pick ABMs or SEs to see their outcomes and adoption</span>}
       </div>
 
       {isLoading && (
@@ -286,15 +337,85 @@ function ReconcileRow({ outcomes: o }: { outcomes: TrackingResponse["Outcomes"] 
   );
 }
 
+// One row per selected SE, outcomes and adoption side by side - the "which of my
+// SEs is executing" view an ABM wants. Doubles as the table view for the tier.
+function BySETable({ rows }: { rows: TrackingSERow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>SE</TableHead>
+            <TableHead className="text-right" title="Distinct planned visits in the window">Planned</TableHead>
+            <TableHead className="text-right" title="Visits with a recorded outcome">Reconciled</TableHead>
+            <TableHead className="text-right" title="Completed or ordered-without-visit, of reconciled">Executed</TableHead>
+            <TableHead className="text-right" title="Paid within 2 days of the visit">Collected</TableHead>
+            <TableHead className="text-right" title="Ordered within 2 days of the visit">Ordered</TableHead>
+            <TableHead className="text-right" title="Days the SE had a plan in their own view">SE-days</TableHead>
+            <TableHead className="text-right" title="Accepted / rejected SE-days">Reviewed</TableHead>
+            <TableHead className="text-right" title="SE-days with a DC added or removed">Edited</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => {
+            const exec = r.Execution_Rate_Pct;
+            return (
+              <TableRow key={r.SE}>
+                <TableCell className="font-medium">
+                  <div className="whitespace-nowrap">{r.SE}</div>
+                  {r.Planned > 0 && r.SE_Days === 0 && (
+                    <div className="text-xs font-normal text-muted-foreground" title="Planned by an ABM/state-scope run; the SE never opened their own view">never opened own plan</div>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{r.Planned.toLocaleString("en-IN")}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.Reconciled.toLocaleString("en-IN")}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {exec === null ? "—" : (
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      {fmtPct(exec)}
+                      <span className={cn("inline-block h-2 w-2 rounded-full", exec >= 70 ? "bg-primary" : exec >= 50 ? "bg-warning" : "bg-destructive")} aria-hidden="true" />
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{fmtINR(r.Collection || null)}</TableCell>
+                <TableCell className="text-right tabular-nums">{fmtINR(r.Sales || null)}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.SE_Days}{r.Runs > r.SE_Days && <span className="text-xs text-muted-foreground"> ({r.Runs} runs)</span>}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.Approved + r.Rejected}{r.Rejected > 0 && <span className="text-xs text-muted-foreground"> ({r.Rejected} rej.)</span>}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.Edited_Days}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function Tiers({ data }: { data: TrackingResponse }) {
   const { Window: win, Outcomes: o, Adoption: a, Quality: q, Data_Health: d, Ops: ops } = data;
+  const sel = win.Selection;
   const neverReconciled = o.Tasks_Reconciled === 0;
   const latency = q.Generation_Latency_Sec;
 
   return (
     <div className="space-y-8">
-      <div className="text-xs text-muted-foreground">
-        {win.Plan_Runs.toLocaleString("en-IN")} plan runs dated {fmtRange(win.From, win.To)} ({win.Days} day{win.Days === 1 ? "" : "s"}) · computed {fmtWhen(data.Generated_At)}
+      <div className="space-y-1 text-xs text-muted-foreground">
+        <div>
+          {win.Plan_Runs.toLocaleString("en-IN")} plan runs dated {fmtRange(win.From, win.To)} ({win.Days} day{win.Days === 1 ? "" : "s"}) · computed {fmtWhen(data.Generated_At)}
+        </div>
+        {sel && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary">
+              Filtered to {sel.Resolved_SEs} SE{sel.Resolved_SEs === 1 ? "" : "s"}
+              {sel.ABMs.length > 0 && ` · ${sel.SEs_Via_ABM} via ${sel.ABMs.length} ABM${sel.ABMs.length === 1 ? "" : "s"}`}
+            </Badge>
+            {sel.Unmatched_ABMs.length > 0 && (
+              <StatusChip status="warning" label={`No SEs on file for ABM ${sel.Unmatched_ABMs.join(", ")}`} />
+            )}
+            <span>Outcomes and Adoption below are for this selection; the other tiers stay network-wide.</span>
+          </div>
+        )}
       </div>
 
       <Section n={1} title="Outcomes" blurb="Does the plan change what SEs collect and sell. Counted per planned visit (one SE, one DC, one day) - a regenerated plan doesn't count twice. Only reconciliation writes these; everything else on this page is upstream of it.">
@@ -305,7 +426,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
             label={neverReconciled ? "Visits reconciled" : "Visit execution rate"}
             value={neverReconciled ? `${o.Tasks_Reconciled} / ${fmtNum(o.Tasks_Planned)}` : fmtPct(o.Visit_Execution_Rate_Pct)}
             hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Reconciled)} reconciled visits`}
-            status={neverReconciled ? { status: "critical", label: "Never measured" } : { status: pctStatus(100 - (o.Visit_Execution_Rate_Pct ?? 0), 30, 50), label: (o.Visit_Execution_Rate_Pct ?? 0) < 50 ? "Most visits missed" : "Healthy" }}
+            status={neverReconciled ? { status: "critical", label: "Never measured" } : executionStatus(o.Visit_Execution_Rate_Pct)}
           />
           <Tile label="Collection realised" value={fmtINR(o.Collection_Realised)} hint={`paid within 2 days of the visit · ${fmtINR(o.Overdue_Pitched)} overdue pitched`} />
           <Tile label="Sales after visit" value={fmtINR(o.Sales_After_Visit)} hint="ordered within 2 days of the visit" />
@@ -318,6 +439,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
           />
           <Tile label="Planned visits" value={fmtNum(o.Tasks_Planned)} hint={`${fmtPct(o.Reconciliation_Rate_Pct)} reconciled · ${fmtNum(o.Task_Rows)} task rows incl. regenerations`} />
         </Grid>
+        {data.By_SE && <BySETable rows={data.By_SE} />}
       </Section>
 
       <Section n={2} title="Adoption" blurb="Do SEs accept the plan or fight it. Counted per SE-day (one SE, one plan date) - an SE reviews one plan a day, however many times it was regenerated. A day's verdict is its latest review.">
@@ -348,7 +470,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
         </div>
       </Section>
 
-      <Section n={3} title="Quality" blurb="What the agents produced - the pitch, the products it recommends, and the routes.">
+      <Section n={3} title="Quality" networkWide={!!sel} blurb="What the agents produced - the pitch, the products it recommends, and the routes.">
         <Grid>
           <Tile
             label="AI-generated pitches"
@@ -389,7 +511,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
         </div>
       </Section>
 
-      <Section n={4} title="Data health" blurb="Is the data feeding all of the above intact. Only real failures count here - a DC excluded by policy is logged by design, not a problem.">
+      <Section n={4} title="Data health" networkWide={!!sel} blurb="Is the data feeding all of the above intact. Only real failures count here - a DC excluded by policy is logged by design, not a problem.">
         <Grid>
           <Tile
             label="Runs hit by a live-pull failure"
@@ -417,7 +539,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
         </div>
       </Section>
 
-      <Section n={5} title="Ops" blurb="The plumbing underneath.">
+      <Section n={5} title="Ops" networkWide={!!sel} blurb="The plumbing underneath.">
         <Grid>
           <Tile
             label="Alert routing"
