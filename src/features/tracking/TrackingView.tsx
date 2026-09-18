@@ -426,7 +426,7 @@ function Tiers({ data }: { data: TrackingResponse }) {
             hero
             label={neverReconciled ? "Visits reconciled" : "Visit execution rate"}
             value={neverReconciled ? `${o.Tasks_Reconciled} / ${fmtNum(o.Tasks_Due)}` : fmtPct(o.Visit_Execution_Rate_Pct)}
-            hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Due)} planned visits due${o.Tasks_Not_Yet_Due > 0 ? ` · ${fmtNum(o.Tasks_Not_Yet_Due)} more planned for today or later` : ""}`}
+            hint={neverReconciled ? "planned visits with a recorded outcome" : `${fmtNum(o.Outcome_Status_Breakdown.COMPLETED ?? 0)} completed + ${fmtNum(o.Outcome_Status_Breakdown.PARTIAL ?? 0)} ordered without a visit, of ${fmtNum(o.Tasks_Due)} planned visits due${o.Tasks_Not_Yet_Due > 0 ? ` · ${fmtNum(o.Tasks_Not_Yet_Due)} more planned for today or later` : ""}${o.Tasks_Window_Open > 0 ? ` · ${fmtNum(o.Tasks_Window_Open)} still within their 2-day window (provisional, may still improve)` : ""}`}
             status={neverReconciled ? { status: "critical", label: "Never measured" } : executionStatus(o.Visit_Execution_Rate_Pct)}
           />
           <Tile label="Collection realised" value={fmtINR(o.Collection_Realised)} hint={`paid within 2 days of the visit · ${fmtINR(o.Overdue_Pitched)} overdue pitched`} />

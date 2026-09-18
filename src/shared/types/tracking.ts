@@ -56,6 +56,9 @@ export interface TrackingOutcomes {
   // for past dates), so it's counted in Tasks_Not_Yet_Due instead of as missed.
   Tasks_Due: number;
   Tasks_Not_Yet_Due: number;
+  // Due visits whose 2-day outcome window hasn't closed yet - their outcome is
+  // provisional and re-checked on every reconciliation until it does.
+  Tasks_Window_Open: number;
   Task_Rows: number;
   Tasks_Reconciled: number;
   // Of due visits.
