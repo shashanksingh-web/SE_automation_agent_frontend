@@ -70,7 +70,9 @@ function parseSeRoutingExceptions(exceptions: Exception[], seEmail: string, plan
   return exceptions
     .filter((e) => e.Source === "RoutingAgent" && e.Detail.startsWith(prefix))
     .map((e) => {
-      const rest = e.Detail.slice(prefix.length).replace(/^:\s*/, "");
+      // The per-plan shape carries a space before "(PLAN_TYPE)" - strip it too, or every
+      // per-plan note fell through to the general (planType null) list.
+      const rest = e.Detail.slice(prefix.length).replace(/^\s*:?\s*/, "");
       const withType = rest.match(/^\(([A-Z_]+)\):\s*(.*)$/);
       return withType
         ? { planType: withType[1] as RoutePlanType, reasonCode: e.Reason_Code, message: withType[2] }
@@ -425,11 +427,16 @@ function PlanCard({
             <span className="font-semibold uppercase tracking-wide">AI reasoning:</span> {plan.llm_reasoning}
           </div>
         )}
-        {routingNotes.map((n, i) => (
-          <p key={i} className="text-xs text-muted-foreground">
-            {n.message}
-          </p>
-        ))}
+        {routingNotes
+          // Route_Diversity_Enforced (planning/routing.py _enforce_distinct_routes, 2026-09-18)
+          // is already folded into a Plan C route's own AI reasoning above - showing it
+          // again here would read the same sentence twice on one card.
+          .filter((n) => !(n.reasonCode === "Route_Diversity_Enforced" && plan.llm_reasoning))
+          .map((n, i) => (
+            <p key={i} className="text-xs text-muted-foreground">
+              {n.message}
+            </p>
+          ))}
         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
           <Stat label="Stops" value={plan.stop_count} />
           <Stat label="Distance" value={`${plan.total_distance_km} km`} />
