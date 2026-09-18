@@ -103,12 +103,18 @@ export const scopeApi = {
   // falling back to the newest of any family - Routing_Plan on the response says which
   // it actually served (added 2026-09-17 after "why plan c is not working": a later
   // Plan A regeneration was hiding the SE's Plan C runs for the same day).
+  // /v1/ per-module version prefix (added 2026-09-18, explicit user request to
+  // modularize the 7 scope endpoints "in their respective API") -- each module's own
+  // version segment so SE's contract can move to /se/v2/ independently of ABM/
+  // District/etc. ever needing to, rather than one shared version forcing every
+  // module to bump together. Backend routing change only (planning/urls.py) -- same
+  // response shape, same _scope_view dispatch underneath.
   get: (segment: ScopePathSegment, scopeValue: string, params?: { date?: string; routing_plan?: RoutingPlanChoice }) => {
     const q = new URLSearchParams();
     if (params?.date) q.set("date", params.date);
     if (params?.routing_plan) q.set("routing_plan", params.routing_plan);
     const qs = q.toString();
-    return apiGet<PlanRunResponse>(`/${segment}/${encodeURIComponent(scopeValue)}/${qs ? `?${qs}` : ""}`);
+    return apiGet<PlanRunResponse>(`/${segment}/v1/${encodeURIComponent(scopeValue)}/${qs ? `?${qs}` : ""}`);
   },
 };
 
