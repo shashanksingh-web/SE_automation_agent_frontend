@@ -66,6 +66,36 @@ export interface HealthScoreDetail {
   Health_Focus_Purposes: string;
 }
 
+// Structured form of Card_Hindi's "4. सक्रिय स्कीमें (Active Schemes)" block
+// (planning/dc_card.py: _active_schemes_detail, added 2026-09-19, explicit user
+// request - "if i want to check which scheme is recomending in which [node] actually
+// he is in" / "in which scheme actually running and elligible"). Active Sales/ABS
+// Schemes are matched by the DC's own Node (every DC in the same Node shares the same
+// list, by design - see services.py's own comment), so Node is included here to make
+// that match auditable. Confirmed_Eligible distinguishes two different confidence
+// levels the pitch itself never showed separately: true means services.py matched
+// this scheme against the richer coupon_service feed AND that scheme's own node/state
+// rule covers this DC's Node (Profit_Hindi/Generated_Description are real numbers,
+// the same ones the pitch quotes); false means this DC's Node has an active
+// abs_scheme/scheme_details row for it, but the coupon_service join either found no
+// match (e.g. its booking window already closed) or matched a scheme whose own rule
+// does not cover this DC's Node - i.e. the scheme fires for the Node in general, but
+// this specific DC's eligibility is not confirmed. null when this DC has no Node on
+// record at all - distinct from a real Node with zero currently-active schemes
+// (Schemes: []).
+export interface ActiveSchemeEntry {
+  Name: string | null;
+  Valid_Until: string | null;
+  Confirmed_Eligible: boolean;
+  Generated_Description: string | null;
+  Profit_Hindi: string | null;
+}
+
+export interface ActiveSchemesDetail {
+  Node: string | null;
+  Schemes: ActiveSchemeEntry[];
+}
+
 // DC Card (Preface) - "Dehaat Center Ko Jaano" (planning/dc_card.py). A second,
 // complementary pre-pitch briefing shown when the SE opens a DC's card, BEFORE the
 // PitchScript's own Ask/Tell/Wish - originally matched pitch_config's "DC Card
@@ -94,6 +124,7 @@ export interface DCCardResponse {
   // null when this DC had no Health Score computed this run.
   Health_Score_Section: string | null;
   Health_Score_Detail: HealthScoreDetail | null;
+  Active_Schemes_Detail: ActiveSchemesDetail | null;
   Card_Hindi: string;
   Data_Sources_Used: string[];
   Data_Sources_Skipped: string[];

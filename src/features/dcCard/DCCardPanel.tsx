@@ -4,6 +4,7 @@ import { ClubStandingDetail } from "@/shared/components/ClubStandingDetail";
 import { BusinessAreaStrengthCard } from "@/features/dcCard/BusinessAreaStrengthCard";
 import { TurnoverStandingCard } from "@/features/dcCard/TurnoverStandingCard";
 import { HealthScoreCard } from "@/features/dcCard/HealthScoreCard";
+import { ActiveSchemesCard } from "@/features/dcCard/ActiveSchemesCard";
 import { Loader2 } from "lucide-react";
 
 interface DCCardPanelProps {
@@ -133,6 +134,14 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
               <div className="rounded-md border p-3 space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-primary">3. Health Score</div>
                 <HealthScoreCard detail={data.Health_Score_Detail} />
+              </div>
+            )}
+            {data.Active_Schemes_Detail && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                  4. सक्रिय स्कीमें (Active Schemes)
+                </div>
+                <ActiveSchemesCard detail={data.Active_Schemes_Detail} />
               </div>
             )}
             <div className="border-t pt-3 text-xs text-muted-foreground">
