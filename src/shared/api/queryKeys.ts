@@ -44,6 +44,7 @@ export const queryKeys = {
     ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all", planDate ?? "all", offset ?? 0] as const,
   run: (planRunId: string) => ["runs", "detail", planRunId] as const,
   adminConfig: () => ["admin-config"] as const,
+  discountSchemes: () => ["admin-discount-schemes"] as const,
   tracking: (from: string, to: string, ses: string[], abms: string[]) =>
     ["admin-tracking", from, to, [...ses].sort().join(","), [...abms].sort().join(",")] as const,
   dcSelection: () => ["dc-selection"] as const,

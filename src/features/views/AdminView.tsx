@@ -13,6 +13,7 @@ import type { AdminConfigField } from "@/shared/types/adminConfig";
 import { DCSelectionPanel } from "@/features/views/DCSelectionPanel";
 import { RoutingOverridesPanel } from "@/features/views/RoutingOverridesPanel";
 import { UsersPanel } from "@/features/views/UsersPanel";
+import { DiscountSchemesPanel } from "@/features/views/DiscountSchemesPanel";
 
 // "DC Selection" is also planning/admin_config.py's own group name for two unrelated
 // numeric thresholds (GR-28/90+-day-boost overdue minimums) - renamed here for the tab
@@ -23,6 +24,9 @@ const PROGRAM_DC_LIST_TAB = "program-dc-list";
 // require_admin), unlike every BusinessConstants group tab below it, which still has
 // no server-side permission check at all (see this session's own scoping note).
 const USERS_TAB = "users";
+// Discount Schemes (added 2026-09-19) - read-only live status from the Discount
+// Service, see DiscountSchemesPanel. Not an admin_config group either.
+const DISCOUNT_SCHEMES_TAB = "discount-schemes";
 const tabLabel = (group: string) => (group === "DC Selection" ? "DC Selection Thresholds" : group);
 
 // Admin Control Panel (added 2026-09-07, explicit user request - "add the new tab for
@@ -174,6 +178,7 @@ export function AdminView() {
         <TabsList className="flex h-auto flex-wrap justify-start gap-1 p-1">
           <TabsTrigger value={PROGRAM_DC_LIST_TAB}>Program DC List</TabsTrigger>
           <TabsTrigger value={USERS_TAB}>Users</TabsTrigger>
+          <TabsTrigger value={DISCOUNT_SCHEMES_TAB}>Discount Schemes</TabsTrigger>
           {data.Groups.map((group) => (
             <TabsTrigger key={group.Group} value={group.Group}>
               {tabLabel(group.Group)}
@@ -191,6 +196,12 @@ export function AdminView() {
 
         <TabsContent value={USERS_TAB} forceMount className="mt-4 data-[state=inactive]:hidden">
           <UsersPanel />
+        </TabsContent>
+
+        {/* Not forceMount: nothing is staged here, and mounting it lazily means the
+            live Discount Service pull only happens when an admin opens the tab. */}
+        <TabsContent value={DISCOUNT_SCHEMES_TAB} className="mt-4">
+          <DiscountSchemesPanel />
         </TabsContent>
 
         {data.Groups.map((group) => (

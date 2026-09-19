@@ -44,6 +44,7 @@ import type { DCCardResponse } from "@/shared/types/dcCard";
 import type { AuthenticatedUser } from "@/features/rbac/types";
 import type { UserRow, CreateUserPayload } from "@/shared/types/users";
 import type { ReconcileResponse, TrackingResponse } from "@/shared/types/tracking";
+import type { DiscountSchemesResponse } from "@/shared/types/discountSchemes";
 
 // ---------------------------------------------------------------------------
 // §6 Directory / Lookup endpoints - populate every dropdown/typeahead. Nine
@@ -350,6 +351,13 @@ export const adminApi = {
   // a string for a "choice" field (e.g. Plan C's decision style), a number otherwise.
   updateConfig: (changes: Record<string, number | string>, reset: string[] = [], actor?: string) =>
     apiPost<AdminConfigResponse>("/admin/config/", { changes, reset, actor }),
+};
+
+// Live Discount Service status (backend added 2026-09-18, planning/views.py
+// admin_discount_schemes) - every currently-active DC-facing scheme, cached 1h
+// server-side; refresh=true forces a live pull.
+export const discountSchemesApi = {
+  get: (refresh = false) => apiGet<DiscountSchemesResponse>(`/admin/discount-schemes/${refresh ? "?refresh=true" : ""}`),
 };
 
 // Tracking dashboard (added 2026-09-16, planning/tracking.py) - one read-only
