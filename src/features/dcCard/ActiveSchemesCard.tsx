@@ -1,4 +1,4 @@
-import { Tag, CheckCircle2, HelpCircle } from "lucide-react";
+import { Tag, CheckCircle2, HelpCircle, Star } from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import type { ActiveSchemesDetail } from "@/shared/types/dcCard";
 
@@ -34,10 +34,24 @@ export function ActiveSchemesCard({ detail }: { detail: ActiveSchemesDetail | nu
         <p className="text-xs text-muted-foreground">No active scheme on file for this Node right now.</p>
       ) : (
         <ul className="space-y-2">
-          {detail.Schemes.map((s, i) => (
-            <li key={i} className="rounded border bg-background/60 p-2">
+          {/* Recommended scheme (discount_service.best_scheme, added 2026-09-20) leads
+              the list - same "अनुशंसित योजना" ordering the pitch and AI prompt use, so
+              this card, the pitch, and the AI script never disagree on which one's best. */}
+          {[...detail.Schemes].sort((a, b) => Number(b.Is_Recommended) - Number(a.Is_Recommended)).map((s, i) => (
+            <li
+              key={i}
+              className={`rounded border p-2 ${s.Is_Recommended ? "border-primary/40 bg-primary/5" : "bg-background/60"}`}
+            >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="text-sm font-medium">{s.Name}</div>
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  {s.Is_Recommended && (
+                    <Star
+                      className="h-3.5 w-3.5 shrink-0 fill-primary text-primary"
+                      aria-label="Recommended"
+                    />
+                  )}
+                  {s.Name}
+                </div>
                 {s.Confirmed_Eligible ? (
                   <Badge
                     variant="default"

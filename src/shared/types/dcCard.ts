@@ -89,6 +89,11 @@ export interface ActiveSchemeEntry {
   Confirmed_Eligible: boolean;
   Generated_Description: string | null;
   Profit_Hindi: string | null;
+  // discount_service.best_scheme's single top pick (added 2026-09-20, "add the
+  // Recommended part scheme portion and logic") - true for at most one scheme per DC,
+  // the same one the pitch's own "अनुशंसित योजना" line and the AI prompt's RECOMMENDED
+  // tag call out (all three read the same rank/value data, so they always agree).
+  Is_Recommended: boolean;
 }
 
 export interface ActiveSchemesDetail {
