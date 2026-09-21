@@ -130,16 +130,23 @@ export function TaskTable({ seId, seName, planRunId, tasks, exceptions = [], onO
           truncate everything down to unreadable, neither of which is a "glance at your
           phone before walking into a store" experience. */}
       <div className="hidden sm:block">
-        <Table>
+        {/* table-fixed + explicit column widths (found live 2026-09-21: a DC name with no
+        width constraint sizes itself to its own longest unbroken line under the default
+        table-layout: auto, which can push the whole table wider than its `overflow-auto`
+        wrapper - not just that column, but every colSpan row sharing this table, including
+        the Reason of visit / Critical detail rows below, which then rendered wider than the
+        viewport despite their own wrapping CSS being correct. Fixing the table's own width
+        fixes both at once. */}
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />
-              <TableHead>DC</TableHead>
-              <TableHead>Task type</TableHead>
-              <TableHead>Purpose</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Overdue</TableHead>
-              <TableHead>Last visit</TableHead>
+              <TableHead className="w-[26%]">DC</TableHead>
+              <TableHead className="w-[10%]">Task type</TableHead>
+              <TableHead className="w-[24%]">Purpose</TableHead>
+              <TableHead className="w-[10%]">Distance</TableHead>
+              <TableHead className="w-[12%]">Overdue</TableHead>
+              <TableHead className="w-[10%]">Last visit</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -159,8 +166,10 @@ export function TaskTable({ seId, seName, planRunId, tasks, exceptions = [], onO
                       )}
                     </TableCell>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-1.5">
-                        {task.DC_Name ?? getCachedDCName(task.DC_ID) ?? `DC ${task.DC_ID}`}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="break-words">
+                          {task.DC_Name ?? getCachedDCName(task.DC_ID) ?? `DC ${task.DC_ID}`}
+                        </span>
                         {task.Critical && (
                           <Badge variant="destructive" title={task.Critical_Reasons || undefined}>
                             Critical
@@ -168,8 +177,8 @@ export function TaskTable({ seId, seName, planRunId, tasks, exceptions = [], onO
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{task.Recommended_Task_Type}</TableCell>
-                    <TableCell className="max-w-[16rem] truncate">{task.Purpose_Of_Visit}</TableCell>
+                    <TableCell className="break-words">{task.Recommended_Task_Type}</TableCell>
+                    <TableCell className="break-words">{task.Purpose_Of_Visit}</TableCell>
                     <TableCell>{task.Distance_Km != null ? `${task.Distance_Km} km` : "-"}</TableCell>
                     <TableCell>
                       {task.Overdue_Aging_Bucket ? (
