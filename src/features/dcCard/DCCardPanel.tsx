@@ -68,16 +68,15 @@ function SectionItemsBody({ items }: { items: SectionItem[] }) {
   );
 }
 
-function SectionBody({ text }: { text: string }) {
-  return <SectionItemsBody items={parseSectionItems(text)} />;
-}
-
 // DC Card (Preface) / "Dehaat Center Ko Jaano" (planning/dc_card.py) - a second,
 // complementary pre-pitch briefing shown before the Pitching Agent's own Ask/Tell/Wish.
-// 3 sections: Who, Where DC Stands, Health Score (Source 3k, added 2026-09-06 - a
-// genuinely new section, not a repurposing of the CSV's original Private Label slot,
-// which was removed 2026-09-03 and stays vacated). Same 404-as-empty-state contract as
-// PitchPanel for Farmer Meeting tasks.
+// "2. DC कहां खड़ा है (Where DC Stands)" removed 2026-09-22, explicit user request -- its
+// only real data source (Upcoming to Sell proxy) was empty on every DC the user checked,
+// leaving nothing but a permanent "no data available" placeholder; planning/dc_card.py's
+// Where_DC_Stands_Section field is still computed/returned (still occasionally has real
+// data for other DCs) but no longer rendered here. Health Score and Active Schemes
+// renumbered 2/3 accordingly. Same 404-as-empty-state contract as PitchPanel for Farmer
+// Meeting tasks.
 export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) {
   const { data, isLoading, noCard, generationFailed } = useDCCard(dailyTaskId ?? undefined);
 
@@ -124,22 +123,16 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
                 )}
               />
             </div>
-            <div className="rounded-md border p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                2. DC कहां खड़ा है (Where DC Stands)
-              </div>
-              <SectionBody text={data.Where_DC_Stands_Section} />
-            </div>
             {data.Health_Score_Detail && (
               <div className="rounded-md border p-3 space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-primary">3. Health Score</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-primary">2. Health Score</div>
                 <HealthScoreCard detail={data.Health_Score_Detail} />
               </div>
             )}
             {data.Active_Schemes_Detail && (
               <div className="rounded-md border p-3 space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  4. सक्रिय स्कीमें (Active Schemes)
+                  3. सक्रिय स्कीमें (Active Schemes)
                 </div>
                 <ActiveSchemesCard detail={data.Active_Schemes_Detail} />
               </div>
