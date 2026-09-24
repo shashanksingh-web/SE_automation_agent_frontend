@@ -279,6 +279,14 @@ export interface PlanRunResponse {
   // counts and task list are the SE's, Scope_Type/Scope_Value are the run's. null
   // otherwise. Added 2026-09-17 with the read-only scope GET.
   Served_From: { Scope_Type: string; Scope_Value: string; Filtered_To_SE: string } | null;
+  // Set only on a State-scope response synthesized by combining today's individual
+  // Node-scope runs, because the daily scheduled scan (run_scheduled_tuff) only ever
+  // produces Node-scope PlanRuns - it never creates a State-scope one. Absent/undefined
+  // on a real single PlanRun (State-scope Create/Refresh, "Generate for all states").
+  // Added 2026-09-24, explicit user report ("all data created on backend why sawing on
+  // frontend") - see planning/views.py's _latest_node_runs_for_state docstring for why
+  // this exists; never silently presented as a normal single-run response.
+  Aggregated_From_Nodes?: { Count: number; Node_Names: string[] } | null;
   // Which Routing Agent family (A/B/C) the served run's routes were generated under;
   // null when the run has no routes. Only on the read (GET) response - lets the view
   // say "Plan A shown because no Plan C run exists yet" instead of showing Plan A

@@ -102,6 +102,18 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
         </div>
       )}
 
+      {/* No State-scope run exists for this date, but the daily scheduled scan already
+          produced real Node-scope runs covering it - the backend combines those instead
+          of falling back to a stale State-scope run with no explanation (added
+          2026-09-24, "all data created on backend why sawing on frontend"). */}
+      {single?.data?.meta.Aggregated_From_Nodes && !isLoading && (
+        <div className="rounded-md border border-warning/60 bg-warning/10 px-3 py-2 text-xs">
+          No single {title.toLowerCase()}-level run exists for {planDate} yet - assembled from{" "}
+          <span className="font-medium">{single.data.meta.Aggregated_From_Nodes.Count} Node-level run(s)</span> generated
+          today (the daily scheduled scan runs per-Node, not per-{title}).
+        </div>
+      )}
+
       {/* The read prefers a run of the selected plan family; when none exists for this
           date it serves the newest of any family and says so here, rather than showing
           Plan A routes under a Plan C badge. */}
