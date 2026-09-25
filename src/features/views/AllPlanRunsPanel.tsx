@@ -50,7 +50,9 @@ export function AllPlanRunsPanel() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(null);
+  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; seName: string } | null>(
+    null,
+  );
 
   const listQuery = useRunsList({
     scope_type: scopeType || undefined,
@@ -311,7 +313,7 @@ export function AllPlanRunsPanel() {
                 planRun={detailQuery.data}
                 onOpenPitch={setPitchTask}
                 onOpenDCCard={setDCCardTask}
-                onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+                onOpenRoutes={(seId, dcNames, _planRunId, seName) => setRoutesTarget({ seId, dcNames, seName })}
               />
             )}
           </div>
@@ -330,6 +332,7 @@ export function AllPlanRunsPanel() {
       />
       <PlanDrawer
         se={routesTarget?.seId ?? null}
+        seEmail={routesTarget?.seName}
         planDate={detailQuery.data?.meta.Plan_Date ?? ""}
         dcNames={routesTarget?.dcNames}
         exceptions={detailQuery.data?.exceptions}

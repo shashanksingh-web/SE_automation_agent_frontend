@@ -26,9 +26,9 @@ export function ZbmView() {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; planRunId: string } | null>(
-    null,
-  );
+  const [routesTarget, setRoutesTarget] = useState<
+    { seId: string; dcNames: Record<string, string>; planRunId: string; seName: string } | null
+  >(null);
 
   const zbmsQuery = useZbms();
 
@@ -120,7 +120,7 @@ export function ZbmView() {
                   exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
+                  onOpenRoutes={(seId, dcNames, planRunId, seName) => setRoutesTarget({ seId, dcNames, planRunId, seName })}
                 />
               ))}
               {merged.seOrder.length === 0 && (
@@ -145,6 +145,7 @@ export function ZbmView() {
       />
       <PlanDrawer
         se={routesTarget?.seId ?? null}
+        seEmail={routesTarget?.seName}
         planDate={planDate}
         planRun={routesTarget?.planRunId}
         dcNames={routesTarget?.dcNames}

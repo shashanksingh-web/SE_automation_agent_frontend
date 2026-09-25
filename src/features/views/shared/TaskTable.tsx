@@ -27,7 +27,7 @@ interface TaskTableProps {
   exceptions?: Exception[];
   onOpenPitch: (task: Task) => void;
   onOpenDCCard: (task: Task) => void;
-  onOpenRoutes: (seId: string, dcNames: Record<string, string>, planRunId: string) => void;
+  onOpenRoutes: (seId: string, dcNames: Record<string, string>, planRunId: string, seName: string) => void;
 }
 
 const INACTIVE_OUTSTANDING_REASON_CODE = "DC_Datamart_Inactive_Outstanding_Unavailable";
@@ -116,6 +116,7 @@ export function TaskTable({ seId, seName, planRunId, tasks, exceptions = [], onO
                 tasks.map((t) => [t.DC_ID, t.DC_Name ?? getCachedDCName(t.DC_ID) ?? t.DC_ID]),
               ),
               planRunId,
+              seName,
             )
           }
           className="gap-1.5"

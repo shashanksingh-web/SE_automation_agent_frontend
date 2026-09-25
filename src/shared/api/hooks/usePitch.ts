@@ -23,8 +23,15 @@ export function usePitch(dailyTaskId: number | undefined) {
     noPitch &&
     query.error instanceof ApiError &&
     query.error.body?.Reason === "generation_failed";
+  // "not_applicable" - Farmer Meeting task, no dc_id, never gets a pitch by design.
+  // Distinguishes this from generationFailed so the "Generate" CTA (added 2026-09-25)
+  // only ever renders for a task that could actually have one.
+  const notApplicable =
+    noPitch &&
+    query.error instanceof ApiError &&
+    query.error.body?.Reason === "not_applicable";
 
-  return { ...query, noPitch, generationFailed };
+  return { ...query, noPitch, generationFailed, notApplicable };
 }
 
 // Recommended_Task_Type values that never carry a pitch - don't render the

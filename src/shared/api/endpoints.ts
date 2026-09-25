@@ -30,6 +30,7 @@ import type {
   AcceptRoutePlanResponse,
   RejectRoutePlanResponse,
   EditRouteStopResponse,
+  GeneratePitchAndDCCardResponse,
 } from "@/shared/types/routing";
 import type {
   PitchResponse,
@@ -247,6 +248,14 @@ export const pitchingApi = {
 // ---------------------------------------------------------------------------
 export const dcCardApi = {
   get: (dailyTaskId: number) => apiGet<DCCardResponse>(`/dc-card/${dailyTaskId}/`),
+};
+
+// On-demand single-task (re)generation (planning/views.py generate_pitch_and_dc_card,
+// added 2026-09-25) - backs the Pitch/DC Card panels' "Generate" CTA when noPitch/
+// noCard is true. One call regenerates both, so one method serves both panels.
+export const pitchDcCardApi = {
+  generate: (dailyTaskId: number) =>
+    apiPost<GeneratePitchAndDCCardResponse>(`/pitch-dc-card/${dailyTaskId}/generate/`, {}),
 };
 
 // ---------------------------------------------------------------------------
