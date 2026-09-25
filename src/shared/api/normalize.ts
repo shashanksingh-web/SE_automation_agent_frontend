@@ -31,7 +31,12 @@ export function normalizePlanRun(raw: PlanRunResponse): NormalizedPlanRun {
       taskIdsByDcId[task.DC_ID] = task;
       taskOrder.push(task.DC_ID);
     }
-    seById[se.SE_ID] = { SE_Name: se.SE_Name, planRunId: String(raw.PlanRun_ID), taskIdsByDcId, taskOrder };
+    // se.PlanRun_ID (only set on an aggregated STATE response) is this SE's own real
+    // run - the top-level raw.PlanRun_ID there is a synthetic "AGGREGATED:..." string
+    // that route_plans/etc. can't resolve (confirmed live: crashed with a 500). Every
+    // other response shape shares one real PlanRun_ID across all SEs, so the fallback
+    // is exactly the old behavior.
+    seById[se.SE_ID] = { SE_Name: se.SE_Name, planRunId: String(se.PlanRun_ID ?? raw.PlanRun_ID), taskIdsByDcId, taskOrder };
     seOrder.push(se.SE_ID);
   }
 
