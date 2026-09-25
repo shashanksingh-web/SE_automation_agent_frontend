@@ -34,9 +34,9 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; planRunId: string } | null>(
-    null,
-  );
+  const [routesTarget, setRoutesTarget] = useState<
+    { seId: string; dcNames: Record<string, string>; planRunId: string; seName: string } | null
+  >(null);
 
   const { merged, perScope, isLoading, isError, errors, allEmpty } = useMultiScopePlanRuns(
     pathSegment,
@@ -130,7 +130,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
           planRun={single.data}
           onOpenPitch={setPitchTask}
           onOpenDCCard={setDCCardTask}
-          onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
+          onOpenRoutes={(seId, dcNames, planRunId, seName) => setRoutesTarget({ seId, dcNames, planRunId, seName })}
         />
       )}
 
@@ -153,7 +153,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
                   exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
+                  onOpenRoutes={(seId, dcNames, planRunId, seName) => setRoutesTarget({ seId, dcNames, planRunId, seName })}
                 />
               ))}
               {merged.seOrder.length === 0 && (
@@ -178,6 +178,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
       />
       <PlanDrawer
         se={routesTarget?.seId ?? null}
+        seEmail={routesTarget?.seName}
         planDate={planDate}
         planRun={routesTarget?.planRunId}
         dcNames={routesTarget?.dcNames}

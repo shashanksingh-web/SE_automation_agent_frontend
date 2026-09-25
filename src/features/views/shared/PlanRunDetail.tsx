@@ -9,7 +9,7 @@ interface PlanRunDetailProps {
   planRun: Pick<NormalizedPlanRun, "meta" | "seById" | "seOrder" | "exceptions">;
   onOpenPitch: (task: Task) => void;
   onOpenDCCard: (task: Task) => void;
-  onOpenRoutes: (seId: string, dcNames: Record<string, string>, planRunId: string) => void;
+  onOpenRoutes: (seId: string, dcNames: Record<string, string>, planRunId: string, seName: string) => void;
 }
 
 // Shared renderer for the PlanRun shape (§7) - used by every scope view and by

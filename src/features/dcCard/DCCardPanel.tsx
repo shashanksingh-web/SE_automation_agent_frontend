@@ -5,7 +5,9 @@ import { BusinessAreaStrengthCard } from "@/features/dcCard/BusinessAreaStrength
 import { TurnoverStandingCard } from "@/features/dcCard/TurnoverStandingCard";
 import { HealthScoreCard } from "@/features/dcCard/HealthScoreCard";
 import { ActiveSchemesCard } from "@/features/dcCard/ActiveSchemesCard";
+import { Button } from "@/shared/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { useGeneratePitchAndDCCard } from "@/shared/api/hooks/useGeneratePitchAndDCCard";
 
 interface DCCardPanelProps {
   // The DailyTask row's own DB id (NOT DC_ID/Sr_No) - same id PitchPanel uses.
@@ -78,7 +80,8 @@ function SectionItemsBody({ items }: { items: SectionItem[] }) {
 // renumbered 2/3 accordingly. Same 404-as-empty-state contract as PitchPanel for Farmer
 // Meeting tasks.
 export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) {
-  const { data, isLoading, noCard, generationFailed } = useDCCard(dailyTaskId ?? undefined);
+  const { data, isLoading, noCard, generationFailed, notApplicable } = useDCCard(dailyTaskId ?? undefined);
+  const generateMutation = useGeneratePitchAndDCCard(dailyTaskId);
 
   return (
     <Drawer open={dailyTaskId != null} onOpenChange={(open) => !open && onClose()}>
@@ -94,16 +97,43 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
           </div>
         )}
 
-        {noCard && generationFailed && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-4 text-sm text-destructive">
-            This task has a DC and should have a card, but generation failed for it
-            specifically - check the plan run's exceptions, or re-run Create/Refresh.
+        {noCard && notApplicable && (
+          <div className="rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
+            No DC card available for this task.
           </div>
         )}
 
-        {noCard && !generationFailed && (
-          <div className="rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
-            No DC card available for this task.
+        {noCard && !notApplicable && (
+          <div
+            className={
+              generationFailed
+                ? "rounded-md border border-destructive/40 bg-destructive/10 px-3 py-4 text-sm text-destructive"
+                : "rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground"
+            }
+          >
+            <p>
+              {generationFailed
+                ? "This task has a DC and should have a card, but generation failed for it specifically."
+                : "No DC card available for this task yet."}
+            </p>
+            <Button
+              size="sm"
+              variant={generationFailed ? "destructive" : "default"}
+              className="mt-3 gap-2"
+              disabled={generateMutation.isPending}
+              onClick={() => generateMutation.mutate()}
+            >
+              {generateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {generationFailed ? "Retry generation" : "Generate DC card"}
+            </Button>
+            {generateMutation.isError && (
+              <p className="mt-2 text-xs text-destructive">Could not generate. Try again.</p>
+            )}
+            {generateMutation.data?.pitch_card_status === "failed" && (
+              <p className="mt-2 text-xs text-destructive">
+                Generation ran but still failed: {generateMutation.data.pitch_failures.map((f) => f.detail).join("; ")}
+              </p>
+            )}
           </div>
         )}
 

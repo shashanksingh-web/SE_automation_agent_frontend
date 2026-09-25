@@ -24,6 +24,13 @@ export function useDCCard(dailyTaskId: number | undefined) {
     noCard &&
     query.error instanceof ApiError &&
     query.error.body?.Reason === "generation_failed";
+  // "not_applicable" - Farmer Meeting task, no dc_id, never gets a card by design.
+  // Distinguishes this from generationFailed so the "Generate" CTA (added 2026-09-25)
+  // only ever renders for a task that could actually have one.
+  const notApplicable =
+    noCard &&
+    query.error instanceof ApiError &&
+    query.error.body?.Reason === "not_applicable";
 
-  return { ...query, noCard, generationFailed };
+  return { ...query, noCard, generationFailed, notApplicable };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, AlertTriangle, X } from "lucide-react";
 import {
   Drawer,
@@ -20,6 +21,9 @@ import {
 } from "@/shared/api/hooks/useRoutes";
 import { useDCs } from "@/shared/api/hooks/useDirectory";
 import { useAuth } from "@/features/auth/AuthContext";
+import { useAppStore } from "@/shared/store/appStore";
+import { useTuffCreate } from "@/shared/api/hooks/useTuff";
+import { queryKeys } from "@/shared/api/queryKeys";
 import { rememberDCName, getCachedDCName } from "@/shared/lib/dcNameCache";
 import { RouteMap } from "@/features/routing/RouteMap";
 import { StatusBanner, ReviewedBadge } from "@/features/views/shared/StatusBanner";
@@ -32,6 +36,12 @@ import { ApiError } from "@/shared/api/client";
 
 interface PlanDrawerProps {
   se: string | null;
+  // The SE's email, a.k.a. SE_Name (planning/views.py) - needed for the "Generate
+  // routes" CTA below: generate_plan_for_scope's SE-type resolution matches DCs by
+  // Assigned_SE_Email specifically (services.py resolve_scope_dcs), unlike route reads
+  // (`se` above), which dual-match se_id/se_name. `se` alone (often the numeric SE_ID)
+  // isn't enough to generate against.
+  seEmail?: string;
   planDate: string;
   // The PlanRun whose routes to show and act on - the one the task table is showing
   // (added 2026-09-17). Without it the routes endpoint resolves "newest run with
@@ -128,14 +138,37 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10);
 // §10 - one card per plan, feasible first, is_default_selected pre-highlighted.
 // select fires the /select/<plan_type>/ call. 422 (no route data / no DCs) is
 // an empty state, not an error.
-export function PlanDrawer({ se, planDate, planRun, dcNames = {}, exceptions = [], onClose }: PlanDrawerProps) {
+export function PlanDrawer({ se, seEmail, planDate, planRun, dcNames = {}, exceptions = [], onClose }: PlanDrawerProps) {
   const { user } = useAuth();
-  const { data, isLoading, isError, error } = useRoutes(se ?? undefined, planDate, planRun);
-  const selectMutation = useSelectRoutePlan(se ?? "", planDate, planRun);
-  const acceptMutation = useAcceptRoutePlan(se ?? "", planDate, planRun, user?.email);
-  const rejectMutation = useRejectRoutePlan(se ?? "", planDate, planRun, user?.email);
-  const addStopMutation = useAddRouteStop(se ?? "", planDate, planRun);
-  const removeStopMutation = useRemoveRouteStop(se ?? "", planDate, planRun);
+
+  // A successful "Generate routes" (below) creates a brand-new PlanRun -- the `planRun`
+  // PROP stays pinned to whatever run the caller opened this drawer with (by design,
+  // see that prop's own doc comment), which for the is422 case is a run that will NEVER
+  // have routes for this SE (that's why Generate was needed at all). Once generation
+  // succeeds, drop the pin so every read/mutation below falls through to
+  // resolve_route_plan_run's own "newest finished run for this se+date" resolution
+  // (planning/routing.py) and picks up the run that was just created.
+  const [pinOverridden, setPinOverridden] = useState(false);
+  const effectivePlanRun = pinOverridden ? undefined : planRun;
+
+  const { data, isLoading, isError, error } = useRoutes(se ?? undefined, planDate, effectivePlanRun);
+  const selectMutation = useSelectRoutePlan(se ?? "", planDate, effectivePlanRun);
+  const acceptMutation = useAcceptRoutePlan(se ?? "", planDate, effectivePlanRun, user?.email);
+  const rejectMutation = useRejectRoutePlan(se ?? "", planDate, effectivePlanRun, user?.email);
+  const addStopMutation = useAddRouteStop(se ?? "", planDate, effectivePlanRun);
+  const removeStopMutation = useRemoveRouteStop(se ?? "", planDate, effectivePlanRun);
+
+  // "Generate routes" CTA (added 2026-09-25) for the is422 empty state below - reuses
+  // the same Create/Refresh mutation every ScopeView already uses
+  // (CreateOrRefreshButton.tsx), scoped to just this SE. Reads routingPlan/
+  // enableRotation/dateSelection straight from the store rather than threading new
+  // props - planDate (an existing prop) is always derived from this same dateSelection
+  // at every call site, so reading it here can't disagree with the prop.
+  const routingPlan = useAppStore((s) => s.routingPlan);
+  const enableRotation = useAppStore((s) => s.enableRotation);
+  const dateSelection = useAppStore((s) => s.dateSelection);
+  const queryClient = useQueryClient();
+  const generateRoutesMutation = useTuffCreate();
 
   // Pitching Agent + DC Card status from the last select/accept/add-stop/remove-stop
   // call (added 2026-09-15, explicit follow-up request - "provide the status like
@@ -250,8 +283,32 @@ export function PlanDrawer({ se, planDate, planRun, dcNames = {}, exceptions = [
         )}
 
         {is422 && (
-          <div className="rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
-            No route data for this SE / date - no DCs found in scope.
+          <div className="space-y-3 rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
+            <p>No route data for this SE / date - no DCs found in scope.</p>
+            {se && seEmail && (
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={generateRoutesMutation.isPending}
+                onClick={() =>
+                  generateRoutesMutation.mutate(
+                    { scopeType: "SE", scopeValue: seEmail, date: dateSelection, routingPlan, enableRotation },
+                    {
+                      onSuccess: () => {
+                        setPinOverridden(true);
+                        queryClient.invalidateQueries({ queryKey: queryKeys.routes(se, planDate, undefined) });
+                      },
+                    },
+                  )
+                }
+              >
+                {generateRoutesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Generate routes (Plan {routingPlan})
+              </Button>
+            )}
+            {generateRoutesMutation.isError && (
+              <p className="text-xs text-destructive">Could not generate routes. Try again.</p>
+            )}
           </div>
         )}
 

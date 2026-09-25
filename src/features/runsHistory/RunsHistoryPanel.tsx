@@ -28,7 +28,7 @@ export function RunsHistoryPanel({ open, onClose }: RunsHistoryPanelProps) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
+  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; seName: string } | null>(
     null,
   );
 
@@ -112,7 +112,7 @@ export function RunsHistoryPanel({ open, onClose }: RunsHistoryPanelProps) {
                   planRun={detailQuery.data}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+                  onOpenRoutes={(seId, dcNames, _planRunId, seName) => setRoutesTarget({ seId, dcNames, seName })}
                 />
               )}
             </div>
@@ -132,6 +132,7 @@ export function RunsHistoryPanel({ open, onClose }: RunsHistoryPanelProps) {
       />
       <PlanDrawer
         se={routesTarget?.seId ?? null}
+        seEmail={routesTarget?.seName}
         planDate={detailQuery.data?.meta.Plan_Date ?? ""}
         dcNames={routesTarget?.dcNames}
         exceptions={detailQuery.data?.exceptions}

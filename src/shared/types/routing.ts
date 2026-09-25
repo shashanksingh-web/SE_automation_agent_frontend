@@ -175,6 +175,16 @@ export interface PitchCardFailure {
   detail: string;
 }
 
+// POST /pitch-dc-card/<daily_task_id>/generate/ (planning/views.py
+// generate_pitch_and_dc_card, added 2026-09-25) - the Pitch/DC Card panels' "Generate"
+// CTA. Single-task version of the resync above (same PitchCardStatus/PitchCardFailure
+// shapes) - always synchronous, no separate polling endpoint here either.
+export interface GeneratePitchAndDCCardResponse {
+  DailyTask_ID: number;
+  pitch_card_status: PitchCardStatus;
+  pitch_failures: PitchCardFailure[];
+}
+
 // GET /routes/<se>/<plan_date>/select/<plan_type>/ (select_default_route_plan,
 // planning/routing.py) returns a small confirmation object, NOT the same {plans: [...]}
 // list shape as the plain routes GET above - flips is_default_selected server-side and

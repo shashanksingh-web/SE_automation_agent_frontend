@@ -7,6 +7,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Loader2, AlertTriangle, Volume2 } from "lucide-react";
 import type { AiSalesForecast } from "@/shared/types/feedback";
 import { pitchingApi } from "@/shared/api/endpoints";
+import { useGeneratePitchAndDCCard } from "@/shared/api/hooks/useGeneratePitchAndDCCard";
 
 interface PitchPanelProps {
   // The DailyTask row's own DB id (NOT DC_ID/Sr_No) - see usePitch.ts and
@@ -198,7 +199,8 @@ function PitchAudioPlayer({ dailyTaskId }: { dailyTaskId: number }) {
 // as an empty state, never an error toast. Fields match pitch_script() in
 // SE_automation_server/planning/views.py, not the spec doc's guessed shape.
 export function PitchPanel({ dailyTaskId, dcName, onClose }: PitchPanelProps) {
-  const { data, isLoading, noPitch, generationFailed } = usePitch(dailyTaskId ?? undefined);
+  const { data, isLoading, noPitch, generationFailed, notApplicable } = usePitch(dailyTaskId ?? undefined);
+  const generateMutation = useGeneratePitchAndDCCard(dailyTaskId);
 
   return (
     <Drawer open={dailyTaskId != null} onOpenChange={(open) => !open && onClose()}>
@@ -214,16 +216,43 @@ export function PitchPanel({ dailyTaskId, dcName, onClose }: PitchPanelProps) {
           </div>
         )}
 
-        {noPitch && generationFailed && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-4 text-sm text-destructive">
-            This task has a DC and should have a pitch, but generation failed for it
-            specifically - check the plan run's exceptions, or re-run Create/Refresh.
+        {noPitch && notApplicable && (
+          <div className="rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
+            No pitch available for this task.
           </div>
         )}
 
-        {noPitch && !generationFailed && (
-          <div className="rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
-            No pitch available for this task.
+        {noPitch && !notApplicable && (
+          <div
+            className={
+              generationFailed
+                ? "rounded-md border border-destructive/40 bg-destructive/10 px-3 py-4 text-sm text-destructive"
+                : "rounded-md border bg-muted/40 px-3 py-4 text-sm text-muted-foreground"
+            }
+          >
+            <p>
+              {generationFailed
+                ? "This task has a DC and should have a pitch, but generation failed for it specifically."
+                : "No pitch available for this task yet."}
+            </p>
+            <Button
+              size="sm"
+              variant={generationFailed ? "destructive" : "default"}
+              className="mt-3 gap-2"
+              disabled={generateMutation.isPending}
+              onClick={() => generateMutation.mutate()}
+            >
+              {generateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {generationFailed ? "Retry generation" : "Generate pitch"}
+            </Button>
+            {generateMutation.isError && (
+              <p className="mt-2 text-xs text-destructive">Could not generate. Try again.</p>
+            )}
+            {generateMutation.data?.pitch_card_status === "failed" && (
+              <p className="mt-2 text-xs text-destructive">
+                Generation ran but still failed: {generateMutation.data.pitch_failures.map((f) => f.detail).join("; ")}
+              </p>
+            )}
           </div>
         )}
 
