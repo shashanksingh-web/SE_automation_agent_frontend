@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/shared/components/ui/drawer";
 import { usePitch } from "@/shared/api/hooks/usePitch";
 import { RecommendedProductCard } from "@/shared/components/RecommendedProductCard";
 import { Badge } from "@/shared/components/ui/badge";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Button } from "@/shared/components/ui/button";
+import { Loader2, AlertTriangle, Volume2 } from "lucide-react";
 import type { AiSalesForecast } from "@/shared/types/feedback";
+import { pitchingApi } from "@/shared/api/endpoints";
 
 interface PitchPanelProps {
   // The DailyTask row's own DB id (NOT DC_ID/Sr_No) - see usePitch.ts and
@@ -163,6 +166,34 @@ function AiSalesForecastSection({ forecast }: { forecast: AiSalesForecast }) {
   );
 }
 
+// Hindi TTS playback (explicit user request, "start the tts integration") - synthesized
+// on first request via planning/views.py's pitch_audio, which can take up to ~1 minute
+// for a long multi-section script (chunked into several TTS calls server-side, see that
+// view's own docstring) and is cached after that. The <audio> element itself isn't
+// mounted until the user presses Play, so opening the panel never eagerly triggers a
+// synthesis nobody asked for - only pressing Play does, and only once per dailyTaskId
+// (unmounting an <audio> and remounting a fresh one on next open is fine here since the
+// backend's own content-hashed cache makes a repeat request near-instant anyway).
+function PitchAudioPlayer({ dailyTaskId }: { dailyTaskId: number }) {
+  const [started, setStarted] = useState(false);
+
+  if (!started) {
+    return (
+      <Button variant="outline" size="sm" className="gap-2" onClick={() => setStarted(true)}>
+        <Volume2 className="h-4 w-4" />
+        Play pitch audio
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <audio controls autoPlay preload="auto" src={pitchingApi.audioUrl(dailyTaskId)} className="h-9 w-full max-w-sm" />
+      <p className="text-xs text-muted-foreground">First playback can take up to a minute to generate - it's cached after that.</p>
+    </div>
+  );
+}
+
 // §11 - per-task pitch script panel. 404 (no pitch, e.g. Farmer Meeting) renders
 // as an empty state, never an error toast. Fields match pitch_script() in
 // SE_automation_server/planning/views.py, not the spec doc's guessed shape.
@@ -210,6 +241,7 @@ export function PitchPanel({ dailyTaskId, dcName, onClose }: PitchPanelProps) {
                 </Badge>
               )}
             </div>
+            {dailyTaskId != null && <PitchAudioPlayer dailyTaskId={dailyTaskId} />}
             <ScriptBody script={data.Script_Hindi} />
 
             {data.AI_Sales_Forecast && <AiSalesForecastSection forecast={data.AI_Sales_Forecast} />}
