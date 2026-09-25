@@ -26,7 +26,7 @@ export function ZbmView() {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
+  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; planRunId: string } | null>(
     null,
   );
 
@@ -42,12 +42,11 @@ export function ZbmView() {
     return [...states];
   }, [zbmsQuery.data, zbmValues]);
 
-  const { merged, perScope, isLoading, isError } = useMultiScopePlanRuns(
+  const { merged, perScope, isLoading, isError, errors, allEmpty } = useMultiScopePlanRuns(
     "state",
     coveredStates,
     dateSelection,
     routingPlan,
-    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -91,7 +90,16 @@ export function ZbmView() {
 
       {isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Failed to load one or more states. Retryable - try Create/Refresh again.
+          {/* See ScopeView's identical block - a PlanningError (422, e.g. the Admin
+              Panel's Scheduling weekly-off-day gate) carries a precise reason worth
+              showing verbatim rather than a generic retry prompt. */}
+          {errors[0]?.message || "Failed to load one or more states. Retryable - try Create/Refresh again."}
+        </div>
+      )}
+
+      {allEmpty && !isLoading && !isError && (
+        <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+          No plan has been generated for these states on this date yet. Press <span className="font-medium text-foreground">Create / Refresh</span> to generate one.
         </div>
       )}
 
@@ -105,13 +113,14 @@ export function ZbmView() {
                   key={seId}
                   seId={seId}
                   seName={merged.seById[seId].SE_Name}
+                  planRunId={merged.seById[seId].planRunId}
                   tasks={merged.seById[seId].taskOrder.map(
                     (dcId) => merged.seById[seId].taskIdsByDcId[dcId],
                   )}
                   exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+                  onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
                 />
               ))}
               {merged.seOrder.length === 0 && (
@@ -137,6 +146,7 @@ export function ZbmView() {
       <PlanDrawer
         se={routesTarget?.seId ?? null}
         planDate={planDate}
+        planRun={routesTarget?.planRunId}
         dcNames={routesTarget?.dcNames}
         exceptions={merged.exceptions}
         onClose={() => setRoutesTarget(null)}

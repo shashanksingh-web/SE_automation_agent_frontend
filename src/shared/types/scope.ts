@@ -47,7 +47,18 @@ export type ViewType =
   | "ops"
   | "district"
   | "block"
-  | "node";
+  | "node"
+  // Admin Control Panel (added 2026-09-07) - live BusinessConstants overrides,
+  // ADMIN role only (see resolveDefaultView in features/rbac/rbac.ts).
+  | "admin"
+  // Tracking dashboard (added 2026-09-16) - outcomes/adoption/quality/data-health/ops
+  // metrics over recent plan runs (planning/tracking.py). ADMIN role only.
+  | "tracking"
+  // System Plan Runs (added 2026-09-10, explicit user request - moved out of the Admin
+  // Control Panel's own tab bar into its own top-level nav item, "with Overall, ZBM/
+  // State Head, State, RBM, ABM") - every PlanRun network-wide, full filter set. ADMIN
+  // role only, same as "admin" above (see AllPlanRunsPanel).
+  | "system-plan-runs";
 
 export type DateSelection =
   | { type: "today" }
@@ -70,12 +81,16 @@ export function dateSelectionCacheKey(selection: DateSelection): string {
     : selection.type;
 }
 
-// ?routing_plan=A|B on every scope/tuff generation endpoint (planning/views.py
-// _routing_plan_choice_from_get, added 2026-08-31) - which of the Routing Agent's two
-// families of 3 route models to generate/persist for a PlanRun: Plan A (Priority-Max/
-// Distance-Min/Balanced) or Plan B (Beat Planning / Cluster-Based: Efficiency/Score-Max/
-// Distance-Min). Omitted (undefined) defaults to Plan A server-side, same as the CLI.
-export type RoutingPlanChoice = "A" | "B";
+// ?routing_plan=A|B|C on every scope/tuff generation endpoint (planning/views.py
+// _routing_plan_choice_from_get, added 2026-08-31, C opened up 2026-09-11) - which
+// Routing Agent mode to generate/persist for a PlanRun: Plan A (Priority-Max/
+// Distance-Min/Balanced, 3 rows), Plan B (Beat Planning / Cluster-Based: Efficiency/
+// Score-Max/Distance-Min, 3 rows), or Plan C (AI-Reasoned via an LLM, exactly 1 row -
+// see se_daily_plan_agent.build_route_llm_reasoned). Omitted (undefined) defaults to
+// Plan A server-side, same as the CLI. C makes a real LLM API call per SE in scope -
+// see RoutingPlanSelector's confirmation copy before wiring this into anything that
+// fires without the admin seeing it first.
+export type RoutingPlanChoice = "A" | "B" | "C";
 
 // ?rotation=true on the same endpoints (planning/views.py _generate_and_respond/tuff,
 // added 2026-09-01) - Plan B only (Beat_Planning_Routing_Agent_Cluster_Model.xlsx Sheet

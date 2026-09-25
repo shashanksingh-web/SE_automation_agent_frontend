@@ -18,13 +18,10 @@ export const queryKeys = {
     dcs: (params: { state?: string; node?: string; se?: string; offset?: number }) =>
       ["directory", "dcs", params] as const,
   },
-  scope: (
-    segment: string,
-    scopeValue: string,
-    date: DateSelection,
-    routingPlan: RoutingPlanChoice,
-    enableRotation: boolean,
-  ) => ["scope", segment, scopeValue, dateSelectionCacheKey(date), routingPlan, enableRotation] as const,
+  // Read-only since 2026-09-17: the key is the scope and date, nothing about how the
+  // plan gets generated (Plan A/B/C only applies to Create / Refresh).
+  scope: (segment: string, scopeValue: string, date: DateSelection, routingPlan: RoutingPlanChoice) =>
+    ["scope", segment, scopeValue, dateSelectionCacheKey(date), routingPlan] as const,
   tuff: (
     scopeType: string,
     scopeValue: string,
@@ -43,7 +40,17 @@ export const queryKeys = {
     ["completion-stats", se ?? "all", objective ?? "all"] as const,
   scheduledScopes: (active?: boolean, scopeType?: string) =>
     ["scheduled-scopes", active ?? "all", scopeType ?? "all"] as const,
-  runs: (scopeType?: string, scopeValue?: string, status?: string) =>
-    ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all"] as const,
+  runs: (scopeType?: string, scopeValue?: string, status?: string, planDate?: string, offset?: number) =>
+    ["runs", scopeType ?? "all", scopeValue ?? "all", status ?? "all", planDate ?? "all", offset ?? 0] as const,
   run: (planRunId: string) => ["runs", "detail", planRunId] as const,
+  adminConfig: () => ["admin-config"] as const,
+  discountSchemes: () => ["admin-discount-schemes"] as const,
+  tracking: (from: string, to: string, ses: string[], abms: string[]) =>
+    ["admin-tracking", from, to, [...ses].sort().join(","), [...abms].sort().join(",")] as const,
+  dcSelection: () => ["dc-selection"] as const,
+  dcSelectionSearch: (q: string, filterMode: string, offset: number) =>
+    ["dc-selection", "search", q, filterMode, offset] as const,
+  dcSelectionPreview: (rulesKey: string, uploadMode: string) =>
+    ["dc-selection", "preview", rulesKey, uploadMode] as const,
+  users: () => ["users"] as const,
 };

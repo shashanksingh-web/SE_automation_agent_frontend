@@ -34,16 +34,15 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
   const enableRotation = useAppStore((s) => s.enableRotation);
   const [pitchTask, setPitchTask] = useState<Task | null>(null);
   const [dcCardTask, setDCCardTask] = useState<Task | null>(null);
-  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string> } | null>(
+  const [routesTarget, setRoutesTarget] = useState<{ seId: string; dcNames: Record<string, string>; planRunId: string } | null>(
     null,
   );
 
-  const { merged, perScope, isLoading, isError } = useMultiScopePlanRuns(
+  const { merged, perScope, isLoading, isError, errors, allEmpty } = useMultiScopePlanRuns(
     pathSegment,
     scopeValues,
     dateSelection,
     routingPlan,
-    enableRotation,
   );
 
   const planDate = dateSelectionToQueryParam(dateSelection) ?? new Date().toISOString().slice(0, 10);
@@ -81,7 +80,47 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
 
       {isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Failed to load one or more scopes. Retryable - try Create/Refresh again.
+          {/* A PlanningError (422 - e.g. the Admin Panel's Scheduling weekly-off-day
+              gate, added 2026-09-13) carries a precise, human-readable reason - show it
+              verbatim rather than a generic "failed" message an admin would just retry
+              pointlessly against an intentional policy block, not a transient error. */}
+          {errors[0]?.message || "Failed to load one or more scopes. Retryable - try Create/Refresh again."}
+        </div>
+      )}
+
+      {/* Nothing generated yet for this scope/date - a view load only reads (2026-09-17),
+          so this is the one place generation is offered, explicitly. */}
+      {allEmpty && !isLoading && !isError && (
+        <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+          No plan has been generated for {planDate} yet. Press <span className="font-medium text-foreground">Create / Refresh</span> to generate one.
+        </div>
+      )}
+
+      {single?.data?.meta.Served_From && !isLoading && (
+        <div className="text-xs text-muted-foreground">
+          Showing this SE's slice of the {single.data.meta.Served_From.Scope_Type} plan for {single.data.meta.Served_From.Scope_Value}, generated {new Date(single.data.meta.Run_Timestamp).toLocaleString()}.
+        </div>
+      )}
+
+      {/* No State-scope run exists for this date, but the daily scheduled scan already
+          produced real Node-scope runs covering it - the backend combines those instead
+          of falling back to a stale State-scope run with no explanation (added
+          2026-09-24, "all data created on backend why sawing on frontend"). */}
+      {single?.data?.meta.Aggregated_From_Nodes && !isLoading && (
+        <div className="rounded-md border border-warning/60 bg-warning/10 px-3 py-2 text-xs">
+          No single {title.toLowerCase()}-level run exists for {planDate} yet - assembled from{" "}
+          <span className="font-medium">{single.data.meta.Aggregated_From_Nodes.Count} Node-level run(s)</span> generated
+          today (the daily scheduled scan runs per-Node, not per-{title}).
+        </div>
+      )}
+
+      {/* The read prefers a run of the selected plan family; when none exists for this
+          date it serves the newest of any family and says so here, rather than showing
+          Plan A routes under a Plan C badge. */}
+      {single?.data?.meta.Routing_Plan && single.data.meta.Routing_Plan !== routingPlan && !isLoading && (
+        <div className="rounded-md border border-warning/60 bg-warning/10 px-3 py-2 text-xs">
+          No Plan {routingPlan} run exists for {planDate} yet - showing the latest <span className="font-medium">Plan {single.data.meta.Routing_Plan}</span> routes instead.
+          Press <span className="font-medium">Create / Refresh</span> to generate Plan {routingPlan}.
         </div>
       )}
 
@@ -91,7 +130,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
           planRun={single.data}
           onOpenPitch={setPitchTask}
           onOpenDCCard={setDCCardTask}
-          onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+          onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
         />
       )}
 
@@ -107,13 +146,14 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
                   key={seId}
                   seId={seId}
                   seName={merged.seById[seId].SE_Name}
+                  planRunId={merged.seById[seId].planRunId}
                   tasks={merged.seById[seId].taskOrder.map(
                     (dcId) => merged.seById[seId].taskIdsByDcId[dcId],
                   )}
                   exceptions={merged.exceptions}
                   onOpenPitch={setPitchTask}
                   onOpenDCCard={setDCCardTask}
-                  onOpenRoutes={(seId, dcNames) => setRoutesTarget({ seId, dcNames })}
+                  onOpenRoutes={(seId, dcNames, planRunId) => setRoutesTarget({ seId, dcNames, planRunId })}
                 />
               ))}
               {merged.seOrder.length === 0 && (
@@ -139,6 +179,7 @@ export function ScopeView({ title, scopeType, pathSegment }: ScopeViewProps) {
       <PlanDrawer
         se={routesTarget?.seId ?? null}
         planDate={planDate}
+        planRun={routesTarget?.planRunId}
         dcNames={routesTarget?.dcNames}
         exceptions={merged.exceptions}
         onClose={() => setRoutesTarget(null)}

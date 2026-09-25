@@ -1,42 +1,73 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { authApi } from "@/shared/api/endpoints";
 import type { AuthenticatedUser } from "@/features/rbac/types";
 
-// App-shell auth (spec §4): standard session/JWT login, layered ON TOP of the
-// (unauthenticated) planning API. The planning API itself needs none of this.
-//
-// This context is a stand-in for a real login flow (session cookie / JWT
-// exchange against your identity provider) - swap `login` below for a real
-// call to your auth backend. The shape (AuthenticatedUser) is what RBAC (§4)
-// consumes; keep that contract when wiring up the real thing.
+// Real session auth (added 2026-09-14, planning/auth_views.py) - replaces the old
+// sessionStorage-of-a-locally-typed-object stand-in. The backend now owns the actual
+// session (a Django cookie, sent automatically per request - see client.ts's
+// credentials: "include"); this context just mirrors "am I logged in, and as whom" for
+// the rest of the app to read, via GET /auth/me/ on mount so a page refresh doesn't
+// drop a still-valid session.
 interface AuthContextValue {
   user: AuthenticatedUser | null;
-  login: (user: AuthenticatedUser) => void;
+  // True only during the initial /auth/me/ check on mount - AppShell uses this to show
+  // a loading state instead of bouncing a genuinely-logged-in user to /login for the
+  // brief moment before that check resolves.
+  isInitializing: boolean;
+  // Throws ApiError (401 on bad credentials, 422 if the account has no role profile)
+  // on failure - LoginPage catches this to show an inline message. Returns the
+  // authenticated user on success (not just via context state) so the caller can
+  // resolveDefaultView/navigate immediately without waiting on a re-render.
+  login: (username: string, password: string) => Promise<AuthenticatedUser>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const STORAGE_KEY = "se-planning.auth.user";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthenticatedUser | null>(() => {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AuthenticatedUser) : null;
-  });
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    authApi
+      .me()
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
+      .catch(() => {
+        // 401 (no session) is the expected outcome for a logged-out visitor - nothing
+        // to surface, `user` just stays null.
+      })
+      .finally(() => {
+        if (!cancelled) setIsInitializing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      login: (nextUser) => {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
-        setUser(nextUser);
+      isInitializing,
+      login: async (username, password) => {
+        const authedUser = await authApi.login(username, password);
+        setUser(authedUser);
+        return authedUser;
       },
       logout: () => {
-        sessionStorage.removeItem(STORAGE_KEY);
         setUser(null);
+        // Fire-and-forget: the UI already treats the user as logged out immediately
+        // (matches the old instant sessionStorage.removeItem behavior) - if this
+        // request itself fails (e.g. network blip), the session cookie may briefly
+        // outlive the client-side state, but the next authenticated request would
+        // just re-hydrate `user` via a fresh /auth/me/ on the next mount, not silently
+        // grant access to anything this tab isn't already showing.
+        authApi.logout().catch(() => {});
       },
     }),
-    [user],
+    [user, isInitializing],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

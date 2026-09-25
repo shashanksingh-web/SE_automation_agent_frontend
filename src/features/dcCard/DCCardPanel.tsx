@@ -3,6 +3,8 @@ import { useDCCard } from "@/shared/api/hooks/useDCCard";
 import { ClubStandingDetail } from "@/shared/components/ClubStandingDetail";
 import { BusinessAreaStrengthCard } from "@/features/dcCard/BusinessAreaStrengthCard";
 import { TurnoverStandingCard } from "@/features/dcCard/TurnoverStandingCard";
+import { HealthScoreCard } from "@/features/dcCard/HealthScoreCard";
+import { ActiveSchemesCard } from "@/features/dcCard/ActiveSchemesCard";
 import { Loader2 } from "lucide-react";
 
 interface DCCardPanelProps {
@@ -66,14 +68,15 @@ function SectionItemsBody({ items }: { items: SectionItem[] }) {
   );
 }
 
-function SectionBody({ text }: { text: string }) {
-  return <SectionItemsBody items={parseSectionItems(text)} />;
-}
-
 // DC Card (Preface) / "Dehaat Center Ko Jaano" (planning/dc_card.py) - a second,
 // complementary pre-pitch briefing shown before the Pitching Agent's own Ask/Tell/Wish.
-// 3 sections matching the CSV's own structure: Who, Where DC Stands, Private Label.
-// Same 404-as-empty-state contract as PitchPanel for Farmer Meeting tasks.
+// "2. DC कहां खड़ा है (Where DC Stands)" removed 2026-09-22, explicit user request -- its
+// only real data source (Upcoming to Sell proxy) was empty on every DC the user checked,
+// leaving nothing but a permanent "no data available" placeholder; planning/dc_card.py's
+// Where_DC_Stands_Section field is still computed/returned (still occasionally has real
+// data for other DCs) but no longer rendered here. Health Score and Active Schemes
+// renumbered 2/3 accordingly. Same 404-as-empty-state contract as PitchPanel for Farmer
+// Meeting tasks.
 export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) {
   const { data, isLoading, noCard, generationFailed } = useDCCard(dailyTaskId ?? undefined);
 
@@ -120,39 +123,21 @@ export function DCCardPanel({ dailyTaskId, dcName, onClose }: DCCardPanelProps) 
                 )}
               />
             </div>
-            <div className="rounded-md border p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                2. DC कहां खड़ा है (Where DC Stands)
+            {data.Health_Score_Detail && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-primary">2. Health Score</div>
+                <HealthScoreCard detail={data.Health_Score_Detail} />
               </div>
-              <SectionBody text={data.Where_DC_Stands_Section} />
-            </div>
-            <div className="flex flex-wrap gap-4 border-t pt-3">
-              {data.Data_Sources_Used.length > 0 && (
-                <div>
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Data sources used
-                  </div>
-                  <ul className="list-inside list-disc space-y-1 text-sm">
-                    {data.Data_Sources_Used.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
+            )}
+            {data.Active_Schemes_Detail && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                  3. सक्रिय स्कीमें (Active Schemes)
                 </div>
-              )}
-              {data.Data_Sources_Skipped.length > 0 && (
-                <div>
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Data sources skipped
-                  </div>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-                    {data.Data_Sources_Skipped.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground">
+                <ActiveSchemesCard detail={data.Active_Schemes_Detail} />
+              </div>
+            )}
+            <div className="border-t pt-3 text-xs text-muted-foreground">
               Generated {new Date(data.Generated_At).toLocaleString()}
             </div>
           </div>

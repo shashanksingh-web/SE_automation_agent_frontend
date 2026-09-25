@@ -1,4 +1,4 @@
-import type { ClubDetail } from "@/shared/types/planRun";
+import type { ClubDetail, HealthSubScore } from "@/shared/types/planRun";
 
 export interface BusinessAreaProduct {
   Name: string | null;
@@ -50,16 +50,69 @@ export interface TurnoverDetail {
   YTD_PL_Last_Year: number | null;
 }
 
+// Structured form of Card_Hindi's "3. Health Score" block (planning/dc_card.py:
+// _health_score_detail, added 2026-09-06; API serialization added 2026-09-07 - the
+// model field existed since the same commit but dc_card() never exposed it as its own
+// field until now, unlike every other card section). Sub_Scores keeps the same 7-
+// component shape as Task.Health_Sub_Scores (shared HealthSubScore type) - this is the
+// same underlying data, just scoped to one DC Card rather than the whole task list.
+// null when this DC had no Health Score computed this run.
+export interface HealthScoreDetail {
+  DC_Health_Score: number | null;
+  Health_Gap: number | null;
+  Sub_Scores: Record<string, HealthSubScore>;
+  Negative_GM_Flag: boolean;
+  Health_Focus_Track: boolean;
+  Health_Focus_Purposes: string;
+}
+
+// Structured form of Card_Hindi's "4. सक्रिय स्कीमें (Active Schemes)" block
+// (planning/dc_card.py: _active_schemes_detail, added 2026-09-19, explicit user
+// request - "if i want to check which scheme is recomending in which [node] actually
+// he is in" / "in which scheme actually running and elligible"). Active Sales/ABS
+// Schemes are matched by the DC's own Node (every DC in the same Node shares the same
+// list, by design - see services.py's own comment), so Node is included here to make
+// that match auditable. Confirmed_Eligible distinguishes two different confidence
+// levels the pitch itself never showed separately: true means services.py matched
+// this scheme against the richer coupon_service feed AND that scheme's own node/state
+// rule covers this DC's Node (Profit_Hindi/Generated_Description are real numbers,
+// the same ones the pitch quotes); false means this DC's Node has an active
+// abs_scheme/scheme_details row for it, but the coupon_service join either found no
+// match (e.g. its booking window already closed) or matched a scheme whose own rule
+// does not cover this DC's Node - i.e. the scheme fires for the Node in general, but
+// this specific DC's eligibility is not confirmed. null when this DC has no Node on
+// record at all - distinct from a real Node with zero currently-active schemes
+// (Schemes: []).
+export interface ActiveSchemeEntry {
+  Name: string | null;
+  Valid_Until: string | null;
+  Confirmed_Eligible: boolean;
+  Generated_Description: string | null;
+  Profit_Hindi: string | null;
+  // discount_service.best_scheme's single top pick (added 2026-09-20, "add the
+  // Recommended part scheme portion and logic") - true for at most one scheme per DC,
+  // the same one the pitch's own "अनुशंसित योजना" line and the AI prompt's RECOMMENDED
+  // tag call out (all three read the same rank/value data, so they always agree).
+  Is_Recommended: boolean;
+}
+
+export interface ActiveSchemesDetail {
+  Node: string | null;
+  Schemes: ActiveSchemeEntry[];
+}
+
 // DC Card (Preface) - "Dehaat Center Ko Jaano" (planning/dc_card.py). A second,
 // complementary pre-pitch briefing shown when the SE opens a DC's card, BEFORE the
 // PitchScript's own Ask/Tell/Wish - originally matched pitch_config's "DC Card
 // (Preface)" CSV structure exactly (3 sections: Who / Where DC Stands / Private
 // Label), but Section 3 (प्राइवेट लेबल / Private Label) was removed 2026-09-03 per
 // direct instruction - the same recommended-products signal still reaches the SE via
-// PitchResponse's own Recommended_Products, just not duplicated here. Generated
-// automatically alongside PitchScript, same trigger point and per-DC-task cadence, but
-// its own DB row/endpoint (GET /dc-card/<daily_task_id>/) and its own 404 case for
-// Farmer Meeting tasks (no DC to brief on).
+// PitchResponse's own Recommended_Products, just not duplicated here. Section 3 is now
+// a genuinely NEW section instead (Health Score, added 2026-09-06) - not a repurposing
+// of the vacated Private Label slot. Generated automatically alongside PitchScript,
+// same trigger point and per-DC-task cadence, but its own DB row/endpoint (GET
+// /dc-card/<daily_task_id>/) and its own 404 case for Farmer Meeting tasks (no DC to
+// brief on).
 export interface DCCardResponse {
   DailyTask_ID: number;
   SE: string;
@@ -71,6 +124,12 @@ export interface DCCardResponse {
   // Same shape/meaning as Task's own Club_Detail (shared type, see planRun.ts) - backs
   // this card's "Scheme Standing" bullet instead of DailyTask.DC_Club_Participation.
   Club_Detail: ClubDetail | null;
+  // Hindi narrative for "3. Health Score" - same text already embedded in Card_Hindi
+  // below, exposed on its own so the frontend isn't forced to re-parse combined text.
+  // null when this DC had no Health Score computed this run.
+  Health_Score_Section: string | null;
+  Health_Score_Detail: HealthScoreDetail | null;
+  Active_Schemes_Detail: ActiveSchemesDetail | null;
   Card_Hindi: string;
   Data_Sources_Used: string[];
   Data_Sources_Skipped: string[];

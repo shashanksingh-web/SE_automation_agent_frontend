@@ -2,6 +2,11 @@ import type { PlanRunResponse, Task } from "@/shared/types/planRun";
 
 export interface NormalizedSE {
   SE_Name: string;
+  // The PlanRun this SE's tasks came from - survives mergeNormalizedPlanRuns, where
+  // different SEs can come from different runs, so the routes drawer opened from an
+  // SE's row can show/act on THAT run's routes rather than re-resolving "newest run
+  // with routes for this SE" on its own (added 2026-09-17).
+  planRunId: string;
   taskIdsByDcId: Record<string, Task>;
   taskOrder: string[]; // DC_IDs in original Tasks[] order - stops[] / Tasks[] order is meaningful
 }
@@ -26,7 +31,7 @@ export function normalizePlanRun(raw: PlanRunResponse): NormalizedPlanRun {
       taskIdsByDcId[task.DC_ID] = task;
       taskOrder.push(task.DC_ID);
     }
-    seById[se.SE_ID] = { SE_Name: se.SE_Name, taskIdsByDcId, taskOrder };
+    seById[se.SE_ID] = { SE_Name: se.SE_Name, planRunId: String(raw.PlanRun_ID), taskIdsByDcId, taskOrder };
     seOrder.push(se.SE_ID);
   }
 

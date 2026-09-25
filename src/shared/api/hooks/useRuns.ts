@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { runsApi } from "@/shared/api/endpoints";
 import { queryKeys } from "@/shared/api/queryKeys";
 import { normalizePlanRun } from "@/shared/api/normalize";
@@ -11,10 +11,27 @@ export function useRunsList(params?: {
   scope_type?: string;
   scope_value?: string;
   status?: string;
+  plan_date?: string;
+  limit?: number;
+  offset?: number;
 }) {
   return useQuery({
-    queryKey: queryKeys.runs(params?.scope_type, params?.scope_value, params?.status),
+    queryKey: queryKeys.runs(params?.scope_type, params?.scope_value, params?.status, params?.plan_date, params?.offset),
     queryFn: () => runsApi.list(params),
+    // Keeps the previous page's rows on screen while a filter/page change is in flight -
+    // this list is browsed interactively (System Plan Runs tab), not a one-shot fetch.
+    placeholderData: (previous) => previous,
+  });
+}
+
+// Added 2026-09-10 - fires the on-demand "generate for all states" background trigger.
+// No onSuccess cache invalidation here: the backend subprocess hasn't produced any new
+// PlanRuns by the time this call returns (it only just started them) - the admin
+// re-filters/paginates System Plan Runs themselves to see new rows land, by design.
+export function useGenerateAllStates() {
+  return useMutation({
+    mutationFn: ({ planDate, actor }: { planDate?: string; actor?: string }) =>
+      runsApi.generateAllStates(planDate, actor),
   });
 }
 

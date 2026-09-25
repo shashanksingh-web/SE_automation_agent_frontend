@@ -5,6 +5,9 @@ import { OverallView } from "@/features/views/OverallView";
 import { ZbmView } from "@/features/views/ZbmView";
 import { ScopeView } from "@/features/views/ScopeView";
 import { OpsView } from "@/features/views/OpsView";
+import { AdminView } from "@/features/views/AdminView";
+import { AllPlanRunsPanel } from "@/features/views/AllPlanRunsPanel";
+import { TrackingView } from "@/features/tracking/TrackingView";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -26,6 +29,9 @@ export const router = createBrowserRouter([
       { path: "abm", element: <ScopeView title="ABM" scopeType="ABM" pathSegment="abm" /> },
       { path: "se", element: <ScopeView title="SE" scopeType="SE" pathSegment="se" /> },
       { path: "ops", element: <OpsView /> },
+      { path: "admin", element: <AdminView /> },
+      { path: "system-plan-runs", element: <AllPlanRunsPanel /> },
+      { path: "tracking", element: <TrackingView /> },
     ],
   },
 ]);
