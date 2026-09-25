@@ -209,6 +209,12 @@ export interface Task {
 export interface SEPlan {
   SE_ID: string;
   SE_Name: string;
+  // Only present on an aggregated STATE response (state assembled from today's Node
+  // runs, no State-scope run exists yet - see planning/views.py's
+  // _serialize_aggregated_state_run) - this SE's own real Node-scope run, since the
+  // top-level PlanRun_ID there is a synthetic "AGGREGATED:..." string routes/etc.
+  // can't act on. Falls back to the top-level PlanRun_ID everywhere else.
+  PlanRun_ID?: number | string;
   Tasks: Task[];
 }
 
