@@ -232,6 +232,12 @@ export const routingApi = {
 // ---------------------------------------------------------------------------
 export const pitchingApi = {
   get: (dailyTaskId: number) => apiGet<PitchResponse>(`/pitch/${dailyTaskId}/`),
+  // Plain href, not a fetch call - PitchPanel hands this straight to an <audio> element
+  // as its src, same apiUrl pattern the DC Selection sample-CSV links already use.
+  // Synthesized on first request (a real pitch can take ~1 min - a full multi-section
+  // script chunks into several TTS calls server-side) and cached after that - see
+  // planning/views.py's pitch_audio for the full story.
+  audioUrl: (dailyTaskId: number) => apiUrl(`/pitch/${dailyTaskId}/audio/`),
 };
 
 // ---------------------------------------------------------------------------
